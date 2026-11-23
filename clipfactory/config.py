@@ -24,7 +24,7 @@ DEFAULTS = {
     "min_score": 1.2,           # how "intense" a moment must be (higher = pickier)
     # Rendering
     "formats": ["vertical", "original"],
-    "vertical_mode": "blur",    # "blur" = full frame on blurred background, "crop" = center crop
+    "vertical_mode": "crop",    # "crop" = zoom to fill, centered on gameplay; "blur" = full frame on blurred background
     "crf": 20,
     "preset": "veryfast",
     # Post defaults

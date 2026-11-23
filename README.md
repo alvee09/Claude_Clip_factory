@@ -30,10 +30,10 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
 3. **Review** → play each clip (toggle 9:16 / Original), edit the title, description and tags,
    tick where it should go, then **Approve & post** or **Reject**.
    *Adjust timing* lets you nudge the start/length and re-cut.
-   *Vertical style* switches a clip between **blurred background** (whole frame, blurred
-   bars above and below) and **zoom to fill** (full screen, sides cut off). For zoom, the
-   Left–Center–Right slider picks which part stays — slide right to keep a facecam in the
-   right corner, for example. Only the vertical version is re-rendered.
+   *Vertical style*: clips are **zoomed to fill** the vertical screen, centered on the
+   gameplay (the sides are cut off). Per clip you can slide the framing left or right, or
+   switch to **blurred background** (whole frame, blurred bars above and below). Only the
+   vertical version is re-rendered.
 4. **Posted** lists everything that went out, with links.
 
 ### How moments are picked (no AI, free)
@@ -50,8 +50,8 @@ clip length, clips per minutes of footage, max per video, and pickiness.
 ### Output
 
 Each clip is rendered as
-- **vertical** 1080×1920 (Shorts / Reels) — full frame over a blurred background, or zoomed to fill
-  (default set in Settings, changeable per clip);
+- **vertical** 1080×1920 (Shorts / Reels) — zoomed to fill, centered on the gameplay
+  (or full frame over a blurred background; default in Settings, changeable per clip);
 - **original** framing (regular YouTube video).
 
 Files go to `clips/` (change in Settings).
