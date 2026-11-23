@@ -168,6 +168,26 @@ def recut(cid):
     return jsonify({"ok": True})
 
 
+@app.post("/api/clips/<int:cid>/style")
+def restyle(cid):
+    """Change how the vertical version is framed and re-render just that version."""
+    clip = _clip_or_404(cid)
+    if clip["status"] in ("rendering", "posting"):
+        return _err("This clip is busy — try again in a moment")
+    body = request.json or {}
+    mode = body.get("vertical_mode")
+    if mode not in ("blur", "crop"):
+        return _err("Unknown vertical style")
+    try:
+        crop_x = min(max(float(body.get("crop_x", 0.5)), 0.0), 1.0)
+    except (TypeError, ValueError):
+        return _err("Position must be a number between 0 and 1")
+    _save_meta(cid, body)
+    db.update("clips", cid, vertical_mode=mode, crop_x=crop_x, status="rendering", post_error=None)
+    worker.process_q.put(("recut", cid, ["vertical"]))
+    return jsonify({"ok": True})
+
+
 @app.post("/api/clips/<int:cid>/approve")
 def approve(cid):
     clip = _clip_or_404(cid)

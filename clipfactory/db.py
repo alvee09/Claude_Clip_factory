@@ -45,9 +45,17 @@ CREATE TABLE IF NOT EXISTS clips (
     ig_reel_url TEXT,
     post_error TEXT,
     added REAL NOT NULL,
-    posted_at REAL
+    posted_at REAL,
+    vertical_mode TEXT,        -- blur / crop; NULL = use the default from settings
+    crop_x REAL DEFAULT 0.5    -- for crop: 0 = left edge, 0.5 = center, 1 = right edge
 );
 """
+
+# Columns added after the first release, for databases created before them.
+MIGRATIONS = [
+    ("clips", "vertical_mode", "TEXT"),
+    ("clips", "crop_x", "REAL DEFAULT 0.5"),
+]
 
 
 def connect():
@@ -60,6 +68,10 @@ def connect():
 def init():
     with connect() as con:
         con.executescript(SCHEMA)
+        for table, col, decl in MIGRATIONS:
+            cols = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+            if col not in cols:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
 
 def q(sql, args=()):

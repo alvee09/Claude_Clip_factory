@@ -61,18 +61,22 @@ def _default_title(video_path, n):
     return f"{stem} – Highlight {n}"
 
 
-def _render_clip(clip, video, s):
+def _render_clip(clip, video, s, kinds=None):
+    """Render the clip's formats; kinds=['vertical'] redoes just the vertical one."""
     folder = Path(s["output_dir"]) / f"{video['id']:04d}_{_slug(Path(video['path']).stem)}"
     paths = {}
-    kinds = [k for k in ("vertical", "original") if k in s["formats"]] or ["vertical"]
-    for i, kind in enumerate(kinds):
+    if not kinds:
+        kinds = [k for k in ("vertical", "original") if k in s["formats"]] or ["vertical"]
+    for kind in kinds:
         out = folder / f"clip{clip['idx']:02d}_{kind}.mp4"
         activity["process"] = f"Rendering clip {clip['idx']} ({kind}) of {Path(video['path']).name}"
-        media.render(video["path"], clip["start"], clip["length"], out, kind, s)
+        media.render(video["path"], clip["start"], clip["length"], out, kind, s,
+                     vertical_mode=clip.get("vertical_mode"), crop_x=clip.get("crop_x"))
         paths[f"path_{kind}"] = str(out)
-    first = paths.get("path_original") or paths["path_vertical"]
     thumb = folder / f"clip{clip['idx']:02d}_thumb.jpg"
-    media.thumbnail(paths.get("path_vertical") or first, clip["length"] * 0.65, thumb)
+    source = paths.get("path_vertical") or clip.get("path_vertical") \
+        or paths.get("path_original") or clip.get("path_original")
+    media.thumbnail(source, clip["length"] * 0.65, thumb)
     db.update("clips", clip["id"], status="pending", thumb=str(thumb), **paths)
 
 
@@ -115,11 +119,11 @@ def process_video(vid):
         db.update("videos", vid, status="error", error=str(e)[:500])
 
 
-def recut_clip(clip_id):
+def recut_clip(clip_id, kinds=None):
     clip = db.one("SELECT * FROM clips WHERE id = ?", (clip_id,))
     video = db.one("SELECT * FROM videos WHERE id = ?", (clip["video_id"],))
     try:
-        _render_clip(clip, video, config.load())
+        _render_clip(clip, video, config.load(), kinds)
     except Exception as e:
         traceback.print_exc()
         db.update("clips", clip_id, status="error", post_error=f"Re-cut failed: {e}"[:500])
