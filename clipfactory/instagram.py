@@ -42,15 +42,17 @@ def account_name():
     return "@" + _check(r).get("username", "?")
 
 
-def upload_reel(path, caption, on_progress=lambda p: None):
+def upload_reel(path, caption, thumb_offset_ms=None, on_progress=lambda p: None):
     s = config.load()
     headers = _auth(s)
     base = _base(s)
 
+    fields = {"media_type": "REELS", "upload_type": "resumable",
+              "caption": caption[:2200], "share_to_feed": "true"}
+    if thumb_offset_ms is not None:
+        fields["thumb_offset"] = str(int(thumb_offset_ms))  # cover = this frame of the Reel
     container = _check(requests.post(
-        f"{base}/{s['ig_user_id']}/media", headers=headers, timeout=60,
-        data={"media_type": "REELS", "upload_type": "resumable",
-              "caption": caption[:2200], "share_to_feed": "true"}))
+        f"{base}/{s['ig_user_id']}/media", headers=headers, timeout=60, data=fields))
     cid = container["id"]
     upload_uri = container.get("uri") or \
         f"https://rupload.facebook.com/ig-api-upload/{s['ig_api_version']}/{cid}"

@@ -55,7 +55,8 @@ def channel_name():
     return items[0]["snippet"]["title"] if items else "(no channel)"
 
 
-def upload(path, title, description, tags, privacy, category, short, on_progress=lambda p: None):
+def upload(path, title, description, tags, privacy, category, short, thumbnail=None, on_progress=lambda p: None):
+    """Returns (url, warning). A thumbnail that YouTube refuses doesn't fail the upload."""
     creds = credentials()
     if not creds:
         raise RuntimeError("YouTube is not connected")
@@ -82,4 +83,12 @@ def upload(path, title, description, tags, privacy, category, short, on_progress
         if status:
             on_progress(status.progress())
     vid = resp["id"]
-    return f"https://youtube.com/shorts/{vid}" if short else f"https://youtu.be/{vid}"
+    url = f"https://youtube.com/shorts/{vid}" if short else f"https://youtu.be/{vid}"
+    warning = None
+    if thumbnail:
+        try:
+            yt.thumbnails().set(videoId=vid, media_body=MediaFileUpload(str(thumbnail), mimetype="image/jpeg")).execute()
+        except Exception as e:
+            # Custom thumbnails need a verified channel (youtube.com/verify)
+            warning = f"Posted, but YouTube didn't take the thumbnail: {e}"
+    return url, warning

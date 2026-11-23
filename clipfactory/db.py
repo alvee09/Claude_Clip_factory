@@ -48,7 +48,10 @@ CREATE TABLE IF NOT EXISTS clips (
     posted_at REAL,
     vertical_mode TEXT,        -- blur / crop; NULL = use the default from settings
     crop_x REAL DEFAULT 0.5,   -- for crop: 0 = left edge, 0.5 = center, 1 = right edge
-    source TEXT DEFAULT 'auto' -- auto = found by the app, manual = picked on the graph
+    source TEXT DEFAULT 'auto', -- auto = found by the app, manual = picked on the graph
+    cover_wide TEXT,           -- your 16:9 thumbnail (used for YouTube)
+    cover_tall TEXT,           -- your 9:16 cover
+    cover_t REAL               -- seconds into the clip of the cover's frame (used for Instagram)
 );
 """
 
@@ -57,6 +60,9 @@ MIGRATIONS = [
     ("clips", "vertical_mode", "TEXT"),
     ("clips", "crop_x", "REAL DEFAULT 0.5"),
     ("clips", "source", "TEXT DEFAULT 'auto'"),
+    ("clips", "cover_wide", "TEXT"),
+    ("clips", "cover_tall", "TEXT"),
+    ("clips", "cover_t", "REAL"),
 ]
 
 

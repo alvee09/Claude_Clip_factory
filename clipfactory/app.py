@@ -145,14 +145,15 @@ def source_video(vid):
 
 @app.get("/media/frame/<int:vid>")
 def frame(vid):
-    """One still from the source video, for the framing preview."""
+    """One still from the source video, for the framing preview (w=1920 for thumbnails)."""
     video = _video_or_404(vid)
     try:
         t = max(0.0, float(request.args.get("t", 0)))
+        w = min(max(int(request.args.get("w", 960)), 160), 1920)
     except ValueError:
-        t = 0.0
+        t, w = 0.0, 960
     out = subprocess.run([media.ffmpeg(), "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-i", video["path"],
-                          "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "4",
+                          "-frames:v", "1", "-vf", f"scale='min({w},iw)':-2", "-q:v", "3" if w > 960 else "4",
                           "-f", "image2", "-c:v", "mjpeg", "-"], capture_output=True)
     if out.returncode != 0 or not out.stdout:
         abort(404)
@@ -202,10 +203,45 @@ def _clip_or_404(cid):
 @app.get("/media/clip/<int:cid>/<kind>")
 def clip_media(cid, kind):
     clip = _clip_or_404(cid)
-    path = clip.get("thumb" if kind == "thumb" else f"path_{kind}")
+    col = kind if kind in ("thumb", "cover_wide", "cover_tall") else f"path_{kind}"
+    path = clip.get(col)
     if not path or not Path(path).exists():
         abort(404)
     return send_file(path, conditional=True)
+
+
+@app.post("/api/clips/<int:cid>/cover")
+def save_cover(cid):
+    """A thumbnail made in the dashboard: 16:9 goes to YouTube, the frame time to Instagram."""
+    clip = _clip_or_404(cid)
+    shape = request.form.get("shape")
+    f = request.files.get("file")
+    if shape not in ("wide", "tall") or not f:
+        return _err("Send a thumbnail image and its shape")
+    try:
+        t = min(max(float(request.form.get("t", 0)), 0.0), clip["length"])
+    except ValueError:
+        return _err("Frame time must be a number (seconds)")
+    data = f.read()
+    if not data.startswith(b"\xff\xd8") or len(data) > 2_000_000:  # YouTube's limit is 2 MB
+        return _err("The thumbnail must be a JPEG under 2 MB")
+    clip_file = clip["path_vertical"] or clip["path_original"]
+    if not clip_file:
+        return _err("This clip hasn't been cut yet")
+    out = Path(clip_file).parent / f"clip{clip['idx']:02d}_cover_{shape}.jpg"
+    out.write_bytes(data)
+    db.update("clips", cid, **{f"cover_{shape}": str(out), "cover_t": t})
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/clips/<int:cid>/cover")
+def remove_cover(cid):
+    clip = _clip_or_404(cid)
+    for shape in ("wide", "tall"):
+        if clip[f"cover_{shape}"]:
+            Path(clip[f"cover_{shape}"]).unlink(missing_ok=True)
+    db.update("clips", cid, cover_wide=None, cover_tall=None, cover_t=None)
+    return jsonify({"ok": True})
 
 
 def _save_meta(cid, body):

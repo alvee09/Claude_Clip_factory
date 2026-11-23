@@ -192,7 +192,7 @@ def post_clip(clip_id, targets):
     clip = db.one("SELECT * FROM clips WHERE id = ?", (clip_id,))
     s = config.load()
     tags = _tags(clip)
-    errors = []
+    errors, notes = [], []
     for target in targets:
         if clip.get(f"{target}_url"):
             continue  # already posted there; never double-post
@@ -203,8 +203,13 @@ def post_clip(clip_id, targets):
                 path = clip["path_vertical"] if short else clip["path_original"]
                 if not path:
                     raise RuntimeError("That format wasn't rendered (check Settings → formats)")
-                url = youtube.upload(path, clip["title"], clip["description"] or "", tags,
-                                     s["yt_privacy"], s["yt_category"], short)
+                cover = clip["cover_wide"] if not short else clip["cover_tall"] or clip["cover_wide"]
+                if cover and not Path(cover).exists():
+                    cover = None
+                url, warning = youtube.upload(path, clip["title"], clip["description"] or "", tags,
+                                              s["yt_privacy"], s["yt_category"], short, thumbnail=cover)
+                if warning:
+                    notes.append(f"{target}: {warning}")
             elif target == "ig_reel":
                 path = clip["path_vertical"] or clip["path_original"]
                 caption = clip["title"]
@@ -212,7 +217,8 @@ def post_clip(clip_id, targets):
                     caption += "\n\n" + clip["description"]
                 if tags:
                     caption += "\n\n" + " ".join("#" + re.sub(r"\W+", "", t) for t in tags)
-                url = instagram.upload_reel(path, caption)
+                offset = clip["cover_t"] * 1000 if clip.get("cover_t") is not None else None
+                url = instagram.upload_reel(path, caption, thumb_offset_ms=offset)
             else:
                 continue
             db.update("clips", clip_id, **{f"{target}_url": url})
@@ -220,9 +226,9 @@ def post_clip(clip_id, targets):
             traceback.print_exc()
             errors.append(f"{target}: {e}")
     if errors:
-        db.update("clips", clip_id, status="post_failed", post_error="\n".join(errors)[:1000])
+        db.update("clips", clip_id, status="post_failed", post_error="\n".join(errors + notes)[:1000])
     else:
-        db.update("clips", clip_id, status="posted", post_error=None, posted_at=db.now())
+        db.update("clips", clip_id, status="posted", post_error="\n".join(notes)[:1000] or None, posted_at=db.now())
 
 
 # ---------- threads ----------

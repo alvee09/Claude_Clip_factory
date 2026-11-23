@@ -32,6 +32,11 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
    - *Framing*: switch between **Zoomed in** (fills the vertical screen, sides cut off — the
      slider picks which part stays) and **Full frame** (whole picture, blurred bars). A live
      preview shows the change before you apply it; only the vertical version is re-made.
+   - *Thumbnail*: slide to the best frame, type a few words (big outlined text), pick the
+     position and color, then **Save thumbnail** as 16:9 and/or 9:16, or **Download** it.
+     When you post, the saved 16:9 one is set as the YouTube thumbnail (custom thumbnails need
+     a verified channel — youtube.com/verify; if YouTube refuses, the video still posts and the
+     card says why), and the chosen frame becomes the Instagram Reel cover.
    - *Timing*: nudge the start/length and re-cut.
 4. **Studio** → pick a video and drag across its **intensity graph** — the video follows, so you
    can find moments by eye. Choose a length (15–60 s) and framing, then **Add as clip**. Your
