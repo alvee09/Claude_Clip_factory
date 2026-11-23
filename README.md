@@ -26,15 +26,18 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
 1. **Drives & videos** → either **drop video files** into the upload box (no drive needed —
    they're copied into `uploads/`), or click your drive under *Connected drives* (or drag a folder from
    Finder into the box) → **Add & scan**. Subfolders are included. The drive is only read.
-2. Each video is analysed and cut. Progress shows in the table and the header.
+2. Each video is analysed and cut. Progress shows in the table and the sidebar.
 3. **Review** → play each clip (toggle 9:16 / Original), edit the title, description and tags,
    tick where it should go, then **Approve & post** or **Reject**.
-   *Adjust timing* lets you nudge the start/length and re-cut.
-   *Vertical style*: clips are **zoomed to fill** the vertical screen, centered on the
-   gameplay (the sides are cut off). Per clip you can slide the framing left or right, or
-   switch to **blurred background** (whole frame, blurred bars above and below). Only the
-   vertical version is re-rendered.
-4. **Posted** lists everything that went out, with links.
+   - *Framing*: switch between **Zoomed in** (fills the vertical screen, sides cut off — the
+     slider picks which part stays) and **Full frame** (whole picture, blurred bars). A live
+     preview shows the change before you apply it; only the vertical version is re-made.
+   - *Timing*: nudge the start/length and re-cut.
+4. **Studio** → pick a video and drag across its **intensity graph** — the video follows, so you
+   can find moments by eye. Choose a length (15–60 s) and framing, then **Add as clip**. Your
+   picks jump ahead of background work and land in Review like the automatic ones (marked
+   "Your pick"). Re-processing a video never deletes your picks.
+5. **Posted** lists everything that went out, with links.
 
 ### How moments are picked (no AI, free)
 

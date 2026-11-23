@@ -3,6 +3,8 @@
 Video processing and posting run on separate threads so an upload never waits
 behind hours of footage being analysed.
 """
+import itertools
+import json
 import os
 import queue
 import re
@@ -13,7 +15,22 @@ from pathlib import Path
 from . import config, db, instagram, media, youtube
 from .config import VIDEO_EXTS
 
-process_q = queue.Queue()
+class JobQueue(queue.PriorityQueue):
+    """Clips you asked for (your picks, re-cuts) run before slow background work."""
+    PRIORITY = {"recut": 0, "scan": 1, "video": 2, "score": 3}
+
+    def __init__(self):
+        super().__init__()
+        self._seq = itertools.count()
+
+    def put(self, job, *args, **kwargs):
+        super().put((self.PRIORITY.get(job[0], 2), next(self._seq), job), *args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        return super().get(*args, **kwargs)[2]
+
+
+process_q = JobQueue()
 post_q = queue.Queue()
 activity = {"process": "Idle", "post": "Idle"}
 
@@ -80,6 +97,43 @@ def _render_clip(clip, video, s, kinds=None):
     db.update("clips", clip["id"], status="pending", thumb=str(thumb), **paths)
 
 
+def new_clip(video, start, length, score, source, s, vertical_mode=None, crop_x=0.5):
+    """Insert a clip row (status 'rendering') and return its id. Numbers never repeat
+    within a video, so a new clip can't overwrite an older clip's files."""
+    idx = (db.one("SELECT MAX(idx) AS m FROM clips WHERE video_id = ?", (video["id"],))["m"] or 0) + 1
+    title = _default_title(video["path"], idx)
+    return db.x(
+        "INSERT INTO clips (video_id, idx, start, length, score, title, description, tags, added, "
+        "source, vertical_mode, crop_x) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (video["id"], idx, start, length, score, title, s["description_template"], s["default_tags"],
+         db.now(), source, vertical_mode, crop_x))
+
+
+# ---------- intensity graph ----------
+
+SCORES = config.DATA / "scores"
+
+
+def save_score(vid, score):
+    SCORES.mkdir(exist_ok=True)
+    (SCORES / f"{vid}.json").write_text(json.dumps([round(float(v), 2) for v in score]))
+
+
+def load_score(vid):
+    path = SCORES / f"{vid}.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def score_video(vid):
+    """Build the graph for a video processed before graphs were saved."""
+    video = db.one("SELECT * FROM videos WHERE id = ?", (vid,))
+    if not video or load_score(vid) is not None or not Path(video["path"]).exists():
+        return
+    activity["process"] = f"Building graph for {Path(video['path']).name}"
+    info = media.probe(video["path"])
+    save_score(vid, media.intensity_curve(video["path"], info))
+
+
 def process_video(vid):
     video = db.one("SELECT * FROM videos WHERE id = ?", (vid,))
     if not video:
@@ -100,17 +154,16 @@ def process_video(vid):
         def prog(p):
             db.update("videos", vid, progress=round(p * 0.8, 3))
         score = media.intensity_curve(video["path"], info, prog)
+        save_score(vid, score)
         moments = media.pick_moments(score, info["duration"], s)
 
         db.update("videos", vid, status="rendering", progress=0.8)
-        # Re-processing replaces clips you haven't acted on yet; posted/rejected ones stay.
-        db.x("DELETE FROM clips WHERE video_id = ? AND status IN ('rendering', 'error', 'pending')", (vid,))
+        # Re-processing replaces automatic clips you haven't acted on yet; your own picks,
+        # posted and rejected clips stay.
+        db.x("DELETE FROM clips WHERE video_id = ? AND status IN ('rendering', 'error', 'pending') "
+             "AND COALESCE(source, 'auto') = 'auto'", (vid,))
         for n, (start, length, sc) in enumerate(moments, 1):
-            cid = db.x(
-                "INSERT INTO clips (video_id, idx, start, length, score, title, description, tags, added) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (vid, n, start, length, sc, _default_title(video["path"], n),
-                 s["description_template"], s["default_tags"], db.now()))
+            cid = new_clip(video, start, length, sc, "auto", s)
             _render_clip(db.one("SELECT * FROM clips WHERE id = ?", (cid,)), video, s)
             db.update("videos", vid, progress=round(0.8 + 0.2 * n / len(moments), 3))
         db.update("videos", vid, status="done", progress=1)
@@ -183,6 +236,8 @@ def _loop(q, key):
                 process_video(*args)
             elif kind == "recut":
                 recut_clip(*args)
+            elif kind == "score":
+                score_video(*args)
             elif kind == "scan":
                 activity[key] = "Scanning folder"
                 scan_source(*args)

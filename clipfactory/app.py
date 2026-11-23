@@ -1,11 +1,13 @@
 """Local web dashboard + JSON API (http://127.0.0.1:5055)."""
+import io
 import os
+import subprocess
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
-from . import config, db, instagram, worker, youtube
+from . import config, db, instagram, media, worker, youtube
 
 app = Flask(__name__, static_folder=None)
 _accounts = {"youtube": None, "instagram": None}
@@ -110,6 +112,75 @@ def remove_source(sid):
     # Only forgets the folder; never deletes anything on the drive.
     db.x("DELETE FROM sources WHERE id = ?", (sid,))
     return jsonify({"ok": True})
+
+
+def _video_or_404(vid):
+    video = db.one("SELECT * FROM videos WHERE id = ?", (vid,))
+    if not video:
+        abort(404)
+    return video
+
+
+_scoring = set()
+
+
+@app.get("/api/videos/<int:vid>/score")
+def video_score(vid):
+    """Per-second intensity for the graph. Older videos get theirs built on first request."""
+    video = _video_or_404(vid)
+    score = worker.load_score(vid)
+    if score is None and video["status"] == "done" and vid not in _scoring:
+        _scoring.add(vid)
+        worker.process_q.put(("score", vid))
+    return jsonify({"score": score, "pending": score is None})
+
+
+@app.get("/media/video/<int:vid>")
+def source_video(vid):
+    video = _video_or_404(vid)
+    if not Path(video["path"]).exists():
+        abort(404)
+    return send_file(video["path"], conditional=True)
+
+
+@app.get("/media/frame/<int:vid>")
+def frame(vid):
+    """One still from the source video, for the framing preview."""
+    video = _video_or_404(vid)
+    try:
+        t = max(0.0, float(request.args.get("t", 0)))
+    except ValueError:
+        t = 0.0
+    out = subprocess.run([media.ffmpeg(), "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-i", video["path"],
+                          "-frames:v", "1", "-vf", "scale='min(960,iw)':-2", "-q:v", "4",
+                          "-f", "image2", "-c:v", "mjpeg", "-"], capture_output=True)
+    if out.returncode != 0 or not out.stdout:
+        abort(404)
+    return send_file(io.BytesIO(out.stdout), mimetype="image/jpeg", max_age=3600)
+
+
+@app.post("/api/videos/<int:vid>/clips")
+def add_clip(vid):
+    """A clip you picked yourself on the graph."""
+    video = _video_or_404(vid)
+    body = request.json or {}
+    try:
+        start = max(0.0, float(body["start"]))
+        length = min(max(3.0, float(body.get("length", 30))), 180.0)
+        crop_x = min(max(float(body.get("crop_x", 0.5)), 0.0), 1.0)
+    except (KeyError, TypeError, ValueError):
+        return _err("Start and length must be numbers (seconds)")
+    if video["duration"]:
+        length = min(length, video["duration"])
+        start = min(start, max(0.0, video["duration"] - length))
+    mode = body.get("vertical_mode")
+    if mode not in (None, "blur", "crop"):
+        return _err("Unknown vertical style")
+    score = worker.load_score(vid) or []
+    peak = max(score[int(start):int(start + length)] or [0])
+    cid = worker.new_clip(video, round(start, 2), length, peak, "manual", config.load(), mode, crop_x)
+    worker.process_q.put(("recut", cid))
+    return jsonify({"id": cid})
 
 
 @app.post("/api/videos/<int:vid>/retry")

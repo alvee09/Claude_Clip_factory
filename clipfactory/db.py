@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS clips (
     added REAL NOT NULL,
     posted_at REAL,
     vertical_mode TEXT,        -- blur / crop; NULL = use the default from settings
-    crop_x REAL DEFAULT 0.5    -- for crop: 0 = left edge, 0.5 = center, 1 = right edge
+    crop_x REAL DEFAULT 0.5,   -- for crop: 0 = left edge, 0.5 = center, 1 = right edge
+    source TEXT DEFAULT 'auto' -- auto = found by the app, manual = picked on the graph
 );
 """
 
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS clips (
 MIGRATIONS = [
     ("clips", "vertical_mode", "TEXT"),
     ("clips", "crop_x", "REAL DEFAULT 0.5"),
+    ("clips", "source", "TEXT DEFAULT 'auto'"),
 ]
 
 

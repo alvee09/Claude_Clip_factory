@@ -4,231 +4,373 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clip Factory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
+  /* Layout: a replay desk. Sidebar of desks (Review, Studio, …); content on the right.
+     Same look as Clip Factory Lite: slate neutrals, a "REC" red accent, a blue selection colour. */
   :root {
-    --bg: #f6f6f4; --panel: #ffffff; --ink: #1b1b1a; --muted: #6b6a66; --line: #e3e2de;
-    --accent: #d9480f; --accent-ink: #fff; --ok: #2b8a3e; --warn: #b7791f; --bad: #c92a2a;
-    --chip: #efeeea;
+    --bg: #eceef2; --surface: #ffffff; --sunk: #e2e5eb; --ink: #13161b; --muted: #5a616d;
+    --line: #d3d8e0; --accent: #d7263d; --accent-ink: #ffffff; --accent-soft: rgba(215, 38, 61, .12);
+    --sel: #1f5fbf; --sel-soft: rgba(31, 95, 191, .14); --ok: #217a52; --warn: #9a6a00; --bad: #c92a2a;
+    --side: #13161b; --side-ink: #e9ecf1; --side-muted: #8c94a2; --side-hover: #1f242c;
+    --f-display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141413; --panel: #1e1e1c; --ink: #ecebe6; --muted: #9b9a94; --line: #33322f;
-      --accent: #ff7a3d; --accent-ink: #141413; --ok: #51cf66; --warn: #fcc419; --bad: #ff6b6b;
-      --chip: #2a2a27;
+      --bg: #0e1115; --surface: #161a20; --sunk: #1d222a; --ink: #e9ecf1; --muted: #8c94a2;
+      --line: #282e38; --accent: #ff4d5e; --accent-ink: #12080a; --accent-soft: rgba(255, 77, 94, .15);
+      --sel: #6aa5ff; --sel-soft: rgba(106, 165, 255, .16); --ok: #4cc38a; --warn: #e3b341; --bad: #ff6b6b;
+      --side: #0a0c0f; --side-hover: #161a20; color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
-           padding: 12px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-  header h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
-  nav { display: flex; gap: 4px; flex-wrap: wrap; }
-  nav button { background: none; border: 0; padding: 6px 12px; border-radius: 6px; color: var(--muted);
-               font: inherit; cursor: pointer; }
-  nav button.on { background: var(--chip); color: var(--ink); font-weight: 600; }
-  .count { font-size: 12px; background: var(--accent); color: var(--accent-ink); border-radius: 9px;
-           padding: 0 6px; margin-left: 4px; }
-  #activity { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
-  main { padding: 20px; max-width: 1400px; margin: 0 auto; }
-  section { display: none; } section.on { display: block; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14.5px/1.5 var(--f-body); }
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100%; }
+
+  /* sidebar */
+  .side { background: var(--side); color: var(--side-ink); padding: 22px 14px; display: flex; flex-direction: column; gap: 22px;
+          position: sticky; top: 0; height: 100vh; }
+  .brand { font: 700 20px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; padding: 0 8px; }
+  .brand i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: 2px;
+             box-shadow: 0 0 0 4px rgba(255, 77, 94, .18); }
+  nav { display: grid; gap: 2px; }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0;
+               color: var(--side-muted); font: 500 14px/1 var(--f-body); padding: 10px; border-radius: 7px; cursor: pointer; }
+  nav button:hover { background: var(--side-hover); color: var(--side-ink); }
+  nav button.on { background: var(--side-hover); color: var(--side-ink); box-shadow: inset 3px 0 0 var(--accent); }
+  nav svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav .count { margin-left: auto; font: 500 11px/1 var(--f-mono); background: var(--accent); color: #fff; border-radius: 9px; padding: 3px 7px; }
+  .activity { margin-top: auto; display: grid; gap: 10px; padding: 0 8px; }
+  .act { display: grid; gap: 3px; }
+  .act .label { color: var(--side-muted); }
+  .act span:last-child { font-size: 12.5px; color: var(--side-ink); overflow-wrap: anywhere; }
+  .act.busy .label::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+                             margin-right: 6px; vertical-align: 1px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  main { padding: 28px clamp(16px, 3vw, 36px) 64px; min-width: 0; }
+  .view { display: none; gap: 18px; max-width: 1180px; }
+  .view.on { display: grid; }
+  .view-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font: 700 clamp(24px, 3vw, 30px)/1.05 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; }
+  h2 { font: 700 16px/1.2 var(--f-display); text-transform: uppercase; letter-spacing: .02em; margin: 0; }
+  .lede { color: var(--muted); margin: 6px 0 0; max-width: 70ch; }
+  .label { font: 500 10.5px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .hint { color: var(--muted); font-size: 13px; }
-  input, textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
-                            border-radius: 6px; padding: 7px 9px; width: 100%; }
-  textarea { resize: vertical; min-height: 54px; }
-  button.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-               padding: 7px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
-  button.btn:hover { border-color: var(--muted); }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-  button.danger { color: var(--bad); }
-  button:disabled { opacity: .5; cursor: default; }
-  .row { display: flex; gap: 8px; align-items: center; }
-  .row > input { flex: 1; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-          display: flex; flex-direction: column; }
-  .card .player { position: relative; background: #000; display: flex; justify-content: center; }
-  .card video { width: 100%; max-height: 460px; display: block; }
-  .card .toggle { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; }
-  .card .toggle button { font-size: 11px; border: 0; padding: 3px 7px; border-radius: 4px;
-                         background: rgba(0,0,0,.6); color: #fff; cursor: pointer; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+
+  input, textarea, select { font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line);
+                            border-radius: 7px; padding: 8px 10px; width: 100%; }
+  textarea { resize: vertical; min-height: 58px; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn { font: 600 13.5px/1 var(--f-body); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+         padding: 9px 13px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.sel { background: var(--sel); border-color: var(--sel); color: var(--surface); }
+  .btn.danger { color: var(--bad); }
+  .btn.small { padding: 7px 10px; font-size: 12.5px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row > input { flex: 1; min-width: 200px; }
+  .bar { height: 5px; background: var(--sunk); border-radius: 3px; overflow: hidden; min-width: 80px; }
+  .bar i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; border: 1px dashed var(--line); border-radius: 12px; }
+  .badge { display: inline-block; font: 500 10.5px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase;
+           padding: 5px 7px; border-radius: 4px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+  .badge.ok { color: var(--ok); } .badge.bad { color: var(--bad); } .badge.warn { color: var(--warn); } .badge.live { color: var(--accent); }
+
+  /* review cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+          display: grid; grid-template-columns: 210px minmax(0, 1fr); }
+  .card .media { position: relative; background: #000; display: grid; place-items: center; min-height: 373px; }
+  .card video { width: 100%; max-height: 520px; display: block; }
+  .card .toggle { position: absolute; top: 8px; left: 8px; display: flex; gap: 2px; background: rgba(0,0,0,.55); border-radius: 6px; padding: 2px; }
+  .card .toggle button { font: 500 11px/1 var(--f-mono); border: 0; padding: 5px 7px; border-radius: 4px; background: none; color: #ddd; cursor: pointer; }
   .card .toggle button.on { background: #fff; color: #000; }
-  .card .body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .meta { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .card .body { padding: 14px 16px 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+  .card-head { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+  .card-head .tc { font: 500 17px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+  .card-head .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 3px; }
+  .kindrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .meter { display: flex; align-items: center; gap: 6px; font: 500 11.5px/1 var(--f-mono); color: var(--muted); }
+  .meter b { display: inline-flex; gap: 2px; }
+  .meter b i { width: 4px; height: 11px; border-radius: 1px; background: var(--sunk); }
+  .meter b i.on { background: var(--accent); }
+  .fieldset { display: grid; gap: 5px; }
   .targets { display: flex; flex-wrap: wrap; gap: 6px; }
-  .targets label { display: flex; align-items: center; gap: 5px; font-size: 13px; background: var(--chip);
-                   padding: 4px 9px; border-radius: 6px; cursor: pointer; }
-  .targets input { width: auto; margin: 0; }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
-  .seg label { display: flex; align-items: center; gap: 5px; font-size: 13px; background: var(--chip);
-               padding: 4px 9px; border-radius: 6px; cursor: pointer; }
-  .seg input { width: auto; margin: 0; }
-  .crop-pos { margin-top: 8px; }
-  .crop-pos input { padding: 0; accent-color: var(--accent); }
-  .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
-  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
-           background: var(--chip); color: var(--muted); }
-  .badge.ok { color: var(--ok); } .badge.bad { color: var(--bad); } .badge.warn { color: var(--warn); }
-  .err { color: var(--bad); font-size: 12px; white-space: pre-wrap; }
-  .links a { color: var(--accent); font-size: 13px; margin-right: 10px; }
+  .chip { display: flex; align-items: center; gap: 6px; font-size: 12.5px; background: var(--sunk); border: 1px solid transparent;
+          padding: 6px 9px; border-radius: 7px; cursor: pointer; }
+  .chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .chip:has(input:disabled) { opacity: .5; cursor: default; }
+  .chip input { width: auto; margin: 0; accent-color: var(--accent); }
+  details { border-top: 1px solid var(--line); padding-top: 9px; }
+  details summary { cursor: pointer; font-size: 13px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+  details summary::after { content: "+"; font-family: var(--f-mono); color: var(--muted); }
+  details[open] summary::after { content: "–"; }
+  details summary .now { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .fr-grid { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; margin-top: 10px; align-items: start; }
+  .fr-grid canvas { width: 112px; height: 199px; background: #000; border-radius: 6px; display: block; }
+  .fr-controls { display: grid; gap: 9px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg label { position: relative; text-align: center; font-size: 12.5px; padding: 7px 4px; cursor: pointer; background: var(--surface); }
+  .seg label + label { border-left: 1px solid var(--line); }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label:has(input:checked) { background: var(--accent-soft); font-weight: 600; }
+  .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .range input { padding: 0; background: none; border: 0; accent-color: var(--accent); }
+  .range .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .timing-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 10px; }
+  .links a { color: var(--accent); font-size: 13px; margin-right: 12px; font-weight: 600; }
+  .err { color: var(--bad); font-size: 12.5px; white-space: pre-wrap; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+
+  /* studio */
+  .studio-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+  #st-player { width: 100%; max-height: 440px; background: #000; border-radius: 8px; display: block; }
+  #chart { width: 100%; height: 170px; display: block; cursor: crosshair; touch-action: pan-y; border-radius: 6px; }
+  #chart:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+  .legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 14px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  .selbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 9px;
+            background: var(--sel-soft); border: 1px solid var(--sel); }
+  .selbar .tc { margin-right: auto; display: grid; gap: 3px; }
+  .selbar .tc b { font: 500 16px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+  .selbar select { width: auto; padding: 6px 8px; background: var(--surface); }
+  .st-clips { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .st-clip { display: grid; gap: 6px; background: var(--sunk); border-radius: 9px; padding: 8px; cursor: pointer; border: 1px solid transparent; text-align: left; font: inherit; color: inherit; }
+  .st-clip:hover { border-color: var(--line); }
+  .st-clip img, .st-clip .ph { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 6px; background: #000; display: block; }
+  .st-clip .ph { display: grid; place-items: center; color: #9aa1ad; font-size: 12px; }
+  .st-clip .t { font: 500 12.5px/1 var(--f-mono); }
+
+  /* library + settings */
+  .drop { display: grid; place-items: center; gap: 5px; text-align: center; padding: 30px 16px; cursor: pointer;
+          border: 2px dashed var(--line); border-radius: 10px; background: var(--sunk); }
+  .drop:hover, .drop.over { border-color: var(--accent); }
+  .drop b { font: 700 17px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .volumes { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  td, th { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; }
-  td.path { overflow-wrap: anywhere; }
-  .bar { height: 5px; background: var(--chip); border-radius: 3px; overflow: hidden; min-width: 80px; margin-top: 4px; }
-  .bar i { display: block; height: 100%; background: var(--accent); }
-  .drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 28px 16px;
-          border: 2px dashed var(--line); border-radius: 10px; cursor: pointer; text-align: center; }
-  .drop:hover, .drop.over { border-color: var(--accent); background: var(--chip); }
-  #up-status { margin-top: 10px; }
-  .volumes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .form { display: grid; grid-template-columns: 220px 1fr; gap: 10px 14px; align-items: center; }
-  .form label { color: var(--muted); }
-  .empty { text-align: center; color: var(--muted); padding: 50px 10px; }
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
-           padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
-  #toast.on { opacity: 1; }
-  @media (max-width: 640px) {
-    main { padding: 16px; } header { padding: 10px 16px; }
-    .form { grid-template-columns: 1fr; } #activity { margin-left: 0; text-align: left; }
+  td, th { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font: 500 10.5px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  td.path { overflow-wrap: anywhere; min-width: 200px; }
+  td.path .p { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .form { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 10px 14px; align-items: center; }
+  .form > label { color: var(--muted); font-size: 13.5px; }
+  .acct { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+  .dot.on { background: var(--ok); }
+
+  #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--bg);
+           padding: 11px 16px; border-radius: 9px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: 90vw; z-index: 20; font-size: 13.5px; }
+  #toast.on { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .side { position: sticky; top: 0; z-index: 10; height: auto; flex-direction: row; align-items: center; padding: 10px 12px; gap: 12px; overflow-x: auto; }
+    .brand { flex: none; } .activity { display: none; }
+    nav { display: flex; gap: 2px; } nav button { width: auto; padding: 8px 10px; } nav button span.lbl { display: none; }
+    nav button.on { box-shadow: inset 0 -3px 0 var(--accent); }
+    .two, .form { grid-template-columns: 1fr; }
   }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+    .card { grid-template-columns: 1fr; } .card .media { min-height: 0; } .card video { max-height: 440px; }
+    .studio-top { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>🎬 Clip Factory</h1>
-  <nav id="tabs">
-    <button data-tab="review" class="on">Review<span class="count" id="n-review" hidden></span></button>
-    <button data-tab="posted">Posted</button>
-    <button data-tab="rejected">Rejected</button>
-    <button data-tab="library">Drives &amp; videos</button>
-    <button data-tab="settings">Settings</button>
-  </nav>
-  <div id="activity"></div>
-</header>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><i></i>Clip Factory</div>
+    <nav id="nav">
+      <button data-view="review" class="on" title="Review">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>
+        <span class="lbl">Review</span><span class="count" id="n-review" hidden></span></button>
+      <button data-view="studio" title="Studio">
+        <svg viewBox="0 0 24 24"><path d="M3 17l4-6 3 4 4-8 3 5 4-3"/><path d="M3 21h18"/></svg><span class="lbl">Studio</span></button>
+      <button data-view="posted" title="Posted">
+        <svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg><span class="lbl">Posted</span></button>
+      <button data-view="rejected" title="Rejected">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="lbl">Rejected</span></button>
+      <button data-view="library" title="Videos &amp; drives">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+        <span class="lbl">Videos &amp; drives</span></button>
+      <button data-view="settings" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        <span class="lbl">Settings</span></button>
+    </nav>
+    <div class="activity">
+      <div class="act" id="act-process"><span class="label">Cutting</span><span>Idle</span></div>
+      <div class="act" id="act-post"><span class="label">Posting</span><span>Idle</span></div>
+    </div>
+  </aside>
 
-<main>
-  <section id="review" class="on">
-    <div class="grid" id="grid-review"></div>
-    <div class="empty" id="empty-review">No clips waiting for review.<br>Upload videos or add a drive folder under <b>Drives &amp; videos</b> to start cutting.</div>
-  </section>
+  <main>
+    <section class="view on" id="v-review">
+      <div class="view-head"><div><h1>Review</h1>
+        <p class="lede">Check each clip, adjust the framing or timing if needed, then approve it to post. Nothing goes out without your approval.</p></div></div>
+      <div class="grid" id="grid-review"></div>
+      <div class="empty" id="empty-review">No clips waiting for review.<br>Upload a video or add a drive folder under <b>Videos &amp; drives</b>, or pick moments yourself in <b>Studio</b>.</div>
+    </section>
 
-  <section id="posted">
-    <div class="grid" id="grid-posted"></div>
-    <div class="empty" id="empty-posted">Nothing posted yet.</div>
-  </section>
+    <section class="view" id="v-studio">
+      <div class="view-head"><div><h1>Studio</h1>
+        <p class="lede">Drag across a video's intensity graph to scrub through it, then add any 15–60 second stretch as a clip. The app's own picks show in red.</p></div></div>
+      <div class="panel">
+        <div class="studio-top">
+          <div class="fieldset"><label class="label" for="st-video">Video</label><select id="st-video"></select></div>
+          <span class="hint mono" id="st-info"></span>
+        </div>
+        <div id="st-body" hidden>
+          <div style="display:grid;gap:12px">
+            <video id="st-player" controls playsinline preload="metadata"></video>
+            <div class="view-head"><span class="label" id="st-chart-label">Intensity · drag across it to scrub the video</span></div>
+            <canvas id="chart" tabindex="0" role="slider" aria-label="Intensity graph. Drag or use the arrow keys to move through the video."></canvas>
+            <div class="legend"><span><i style="background:var(--accent)"></i>Intensity (loudness, sudden jumps, scene cuts)</span>
+              <span><i style="background:var(--sel-soft);outline:1px solid var(--sel)"></i>Your selection</span>
+              <span><i style="background:var(--accent-soft);outline:1px solid var(--accent)"></i>Clips already cut</span></div>
+            <div class="selbar">
+              <span class="tc"><span class="label">Selected</span><b id="sel-tc">0:00 – 0:30</b></span>
+              <select id="sel-len" aria-label="Clip length"><option value="15">15 s</option><option value="20">20 s</option>
+                <option value="30" selected>30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
+              <select id="sel-mode" aria-label="Vertical framing"><option value="crop">Zoomed in</option><option value="blur">Full frame</option></select>
+              <button class="btn small" id="nudge-back" aria-label="Move 5 seconds earlier">−5 s</button>
+              <button class="btn small" id="nudge-fwd" aria-label="Move 5 seconds later">+5 s</button>
+              <button class="btn small" id="play-sel">Play</button>
+              <button class="btn small sel" id="add-sel">Add as clip</button>
+            </div>
+          </div>
+        </div>
+        <div class="empty" id="st-empty">No finished videos yet. Upload one under <b>Videos &amp; drives</b>.</div>
+      </div>
+      <div class="panel" id="st-clips-panel" hidden>
+        <div class="view-head"><h2>Clips from this video</h2><span class="hint">Click one to review it.</span></div>
+        <div class="st-clips" id="st-clips"></div>
+      </div>
+    </section>
 
-  <section id="rejected">
-    <div class="grid" id="grid-rejected"></div>
-    <div class="empty" id="empty-rejected">No rejected clips.</div>
-  </section>
+    <section class="view" id="v-posted">
+      <div class="view-head"><div><h1>Posted</h1><p class="lede">Everything that went out, with links.</p></div></div>
+      <div class="grid" id="grid-posted"></div>
+      <div class="empty" id="empty-posted">Nothing posted yet.</div>
+    </section>
 
-  <section id="library">
-    <div class="panel">
-      <h2>Upload videos</h2>
-      <label class="drop" id="drop">
-        <input type="file" id="up-files" accept="video/*,.mkv,.mts,.m2ts,.ts,.flv,.wmv" multiple hidden>
-        <b>Drop video files here</b> or click to choose
-        <span class="hint">They're copied into Clip Factory and cut right away.</span>
-      </label>
-      <div id="up-status" hidden>
-        <div class="hint" id="up-label"></div>
-        <div class="bar"><i id="up-bar" style="width:0"></i></div>
-      </div>
-    </div>
-    <div class="panel">
-      <h2>Add a folder from your drive</h2>
-      <div class="row">
-        <input id="src-path" placeholder="/Volumes/MyDrive/Videos  — tip: drag the folder from Finder into this box">
-        <button class="btn primary" id="add-src">Add &amp; scan</button>
-      </div>
-      <div class="volumes" id="volumes"></div>
-      <p class="hint">Every video in the folder (and its subfolders) is scanned. Your drive is only read — nothing on it is changed or deleted.</p>
-    </div>
-    <div class="panel"><h2>Folders</h2><table id="sources"></table></div>
-    <div class="panel"><h2>Videos</h2><table id="videos"></table></div>
-  </section>
+    <section class="view" id="v-rejected">
+      <div class="view-head"><div><h1>Rejected</h1><p class="lede">Clips you passed on. Bring any back to review.</p></div></div>
+      <div class="grid" id="grid-rejected"></div>
+      <div class="empty" id="empty-rejected">No rejected clips.</div>
+    </section>
 
-  <section id="settings">
-    <div class="panel">
-      <h2>YouTube</h2>
-      <p id="yt-status" class="hint"></p>
-      <div class="row" id="yt-setup">
-        <input type="file" id="yt-file" accept=".json">
-        <button class="btn" id="yt-upload">Upload OAuth client file</button>
-        <button class="btn primary" id="yt-connect">Sign in with Google</button>
-        <button class="btn danger" id="yt-disconnect">Disconnect</button>
+    <section class="view" id="v-library">
+      <div class="view-head"><div><h1>Videos &amp; drives</h1>
+        <p class="lede">Upload videos or point at a folder on your drive. Every video is analysed and cut automatically. Your drive is only read, never changed.</p></div></div>
+      <div class="two">
+        <div class="panel">
+          <h2>Upload videos</h2>
+          <label class="drop" id="drop">
+            <input type="file" id="up-files" accept="video/*,.mkv,.mts,.m2ts,.ts,.flv,.wmv" multiple hidden>
+            <b>Drop videos here</b><span class="hint">or click to choose · copied into Clip Factory</span>
+          </label>
+          <div id="up-status" hidden><div class="hint" id="up-label"></div><div class="bar"><i id="up-bar" style="width:0"></i></div></div>
+        </div>
+        <div class="panel">
+          <h2>Add a folder from your drive</h2>
+          <div class="row"><input id="src-path" placeholder="/Volumes/MyDrive/Videos"><button class="btn primary" id="add-src">Add &amp; scan</button></div>
+          <div class="volumes" id="volumes"></div>
+          <p class="hint">Tip: drag a folder from Finder into the box. Subfolders are included.</p>
+        </div>
       </div>
-    </div>
-    <div class="panel">
-      <h2>Instagram</h2>
-      <p id="ig-status" class="hint"></p>
-      <div class="form">
-        <label>Instagram user ID</label><input id="s-ig_user_id">
-        <label>Access token</label><input id="s-ig_token" type="password" autocomplete="off">
-        <label>API host</label>
-        <select id="s-ig_api_host">
-          <option value="graph.instagram.com">graph.instagram.com (Instagram Login)</option>
-          <option value="graph.facebook.com">graph.facebook.com (Facebook Login / Page-linked)</option>
-        </select>
+      <div class="panel"><h2>Folders</h2><div class="table-wrap"><table id="sources"></table></div></div>
+      <div class="panel"><h2>Videos</h2><div class="table-wrap"><table id="videos"></table></div></div>
+    </section>
+
+    <section class="view" id="v-settings">
+      <div class="view-head"><div><h1>Settings</h1></div><button class="btn primary" id="save-settings">Save settings</button></div>
+      <div class="two">
+        <div class="panel">
+          <h2>YouTube</h2>
+          <div class="acct"><span class="dot" id="yt-dot"></span><span id="yt-status" class="hint"></span></div>
+          <div class="row" id="yt-setup">
+            <input type="file" id="yt-file" accept=".json">
+            <button class="btn" id="yt-upload">Upload OAuth client file</button>
+            <button class="btn primary" id="yt-connect">Sign in with Google</button>
+            <button class="btn danger" id="yt-disconnect">Disconnect</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Instagram</h2>
+          <div class="acct"><span class="dot" id="ig-dot"></span><span id="ig-status" class="hint"></span></div>
+          <div class="form">
+            <label for="s-ig_user_id">Instagram user ID</label><input id="s-ig_user_id">
+            <label for="s-ig_token">Access token</label><input id="s-ig_token" type="password" autocomplete="off">
+            <label for="s-ig_api_host">API host</label>
+            <select id="s-ig_api_host">
+              <option value="graph.instagram.com">graph.instagram.com (Instagram Login)</option>
+              <option value="graph.facebook.com">graph.facebook.com (Facebook Login / Page-linked)</option>
+            </select>
+          </div>
+          <div class="row"><button class="btn primary" id="ig-save">Save &amp; test</button><button class="btn danger" id="ig-disconnect">Disconnect</button></div>
+        </div>
       </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="ig-save">Save &amp; test</button>
-        <button class="btn danger" id="ig-disconnect">Disconnect</button>
+      <div class="panel">
+        <h2>Clip cutting</h2>
+        <div class="form">
+          <label for="s-clip_length">Clip length (seconds)</label><input id="s-clip_length" type="number" min="5" max="180">
+          <label for="s-minutes_per_clip">One clip per N minutes of footage</label><input id="s-minutes_per_clip" type="number" min="1">
+          <label for="s-max_clips_per_video">Max clips per video</label><input id="s-max_clips_per_video" type="number" min="1">
+          <label for="s-min_score">Pickiness (1 = loose, 2.5 = strict)</label><input id="s-min_score" type="number" step="0.1">
+          <label for="s-vertical_mode">Vertical framing</label>
+          <select id="s-vertical_mode"><option value="crop">Zoomed in, centered on gameplay</option><option value="blur">Full frame on blurred background</option></select>
+          <label for="s-output_dir">Output folder</label><input id="s-output_dir">
+        </div>
+        <p class="hint">Applies to videos processed after saving. Use “Re-process” on a video to redo it.</p>
       </div>
-    </div>
-    <div class="panel">
-      <h2>Clip cutting</h2>
-      <div class="form">
-        <label>Clip length (seconds)</label><input id="s-clip_length" type="number" min="5" max="180">
-        <label>One clip per N minutes of footage</label><input id="s-minutes_per_clip" type="number" min="1">
-        <label>Max clips per video</label><input id="s-max_clips_per_video" type="number" min="1">
-        <label>Pickiness (1 = loose, 2.5 = strict)</label><input id="s-min_score" type="number" step="0.1">
-        <label>Vertical style</label>
-        <select id="s-vertical_mode">
-          <option value="crop">Zoom to fill, centered on gameplay</option>
-          <option value="blur">Full frame on blurred background</option>
-        </select>
-        <label>Output folder</label><input id="s-output_dir">
+      <div class="panel">
+        <h2>Post defaults</h2>
+        <div class="form">
+          <label for="s-yt_privacy">YouTube visibility</label>
+          <select id="s-yt_privacy"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select>
+          <label for="s-yt_category">YouTube category</label>
+          <select id="s-yt_category"><option value="20">Gaming</option><option value="17">Sports</option>
+            <option value="24">Entertainment</option><option value="22">People &amp; Blogs</option></select>
+          <label for="s-default_tags">Default tags (comma separated)</label><input id="s-default_tags">
+          <label for="s-description_template">Default description</label><textarea id="s-description_template"></textarea>
+        </div>
       </div>
-      <p class="hint">Changes apply to videos processed after saving. Use “Re-process” on a video to redo it.</p>
-    </div>
-    <div class="panel">
-      <h2>Post defaults</h2>
-      <div class="form">
-        <label>YouTube visibility</label>
-        <select id="s-yt_privacy">
-          <option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option>
-        </select>
-        <label>YouTube category</label>
-        <select id="s-yt_category">
-          <option value="20">Gaming</option><option value="17">Sports</option>
-          <option value="24">Entertainment</option><option value="22">People &amp; Blogs</option>
-        </select>
-        <label>Default tags (comma separated)</label><input id="s-default_tags">
-        <label>Default description</label><textarea id="s-description_template"></textarea>
-      </div>
-    </div>
-    <button class="btn primary" id="save-settings">Save settings</button>
-  </section>
-</main>
-<div id="toast"></div>
+    </section>
+  </main>
+</div>
+<div id="toast" role="status"></div>
 
 <script>
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmtT = s => { s = Math.round(s || 0); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+const fmtT = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
   return (h ? h + ":" + String(m).padStart(2,"0") : m) + ":" + String(x).padStart(2,"0"); };
-const fmtGB = b => (b / 1e9).toFixed(2) + " GB";
-let S = null;               // latest state
-const cards = new Map();    // clip id -> element
+const fmtGB = b => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : (b / 1e6).toFixed(0) + " MB";
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let S = null;               // latest state from the server
+const cards = new Map();    // clip id -> card element
 let settingsLoaded = false;
 
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on");
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 3500); }
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 3800); }
 
 async function api(url, body, method = "POST") {
   const opts = { method, headers: {} };
@@ -240,99 +382,130 @@ async function api(url, body, method = "POST") {
   return data;
 }
 
-// ---------- tabs ----------
-$("#tabs").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
-  document.querySelectorAll("main section").forEach(s => s.classList.toggle("on", s.id === b.dataset.tab));
-  try { localStorage.setItem("tab", b.dataset.tab); } catch {}
-});
-try { const t = localStorage.getItem("tab"); if (t) $(`#tabs [data-tab="${t}"]`)?.click(); } catch {}
+// ---------- navigation ----------
+function show(view) {
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  document.querySelectorAll("main .view").forEach(s => s.classList.toggle("on", s.id === "v-" + view));
+  try { localStorage.setItem("view", view); } catch {}
+  if (view === "studio") studioEnter();
+}
+$("#nav").addEventListener("click", e => { const b = e.target.closest("button"); if (b) show(b.dataset.view); });
+
+// ---------- shared: draw a frame in a vertical framing ----------
+const small = document.createElement("canvas"), sctx = small.getContext("2d");
+const mid = document.createElement("canvas"), mctx = mid.getContext("2d");
+small.width = 27; small.height = 48; mid.width = 108; mid.height = 192;
+function paint(g, W, H, src, vw, vh, mode, cropX) {
+  if (!vw || !vh) return;
+  const cover = Math.max(W / vw, H / vh), sw = W / cover, sh = H / cover;
+  if (mode === "crop") { g.drawImage(src, (vw - sw) * cropX, (vh - sh) / 2, sw, sh, 0, 0, W, H); return; }
+  sctx.drawImage(src, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, 27, 48);
+  mctx.imageSmoothingEnabled = true; mctx.drawImage(small, 0, 0, 108, 192);
+  g.imageSmoothingEnabled = true; g.drawImage(mid, 0, 0, W, H);
+  g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(0, 0, W, H);
+  const fit = Math.min(W / vw, H / vh), dw = vw * fit, dh = vh * fit;
+  g.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+function meter(score) {
+  const lit = clamp(Math.round((score || 0) / 0.6), 0, 6);
+  return `<b aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<i class="${i < lit ? "on" : ""}"></i>`).join("")}</b>${(score || 0).toFixed(1)}`;
+}
 
 // ---------- clip cards ----------
 const TARGETS = [["yt_short", "YouTube Short"], ["yt_video", "YouTube video"], ["ig_reel", "Instagram Reel"]];
+const STATUS = { rendering: ["warn", "Cutting…"], pending: ["live", "Needs review"], posting: ["warn", "Posting…"],
+                 posted: ["ok", "Posted"], post_failed: ["bad", "Post failed"], rejected: ["", "Rejected"], error: ["bad", "Error"] };
 
 function bucket(c) {
   if (c.status === "posted") return "posted";
   if (c.status === "rejected") return "rejected";
-  if (c.status === "rendering" && !c.thumb) return null; // not ready to show yet
+  if (c.status === "rendering" && !c.thumb) return null;   // not ready to show yet
   return "review";
 }
+const modeOf = c => c.vertical_mode || S.settings.vertical_mode;
 
 function makeCard(c) {
-  const el = document.createElement("div");
-  el.className = "card";
+  const el = document.createElement("article");
+  el.className = "card"; el.id = "clip-" + c.id;
   el.innerHTML = `
-    <div class="player">
-      <video controls preload="none" playsinline></video>
-      <div class="toggle"></div>
-    </div>
+    <div class="media"><video controls preload="none" playsinline></video><div class="toggle"></div></div>
     <div class="body">
-      <div class="meta"></div>
-      <input class="f-title" placeholder="Title">
-      <textarea class="f-desc" placeholder="Description / caption"></textarea>
-      <input class="f-tags" placeholder="Tags, comma separated">
-      <div class="targets">${TARGETS.map(([k, l]) =>
-        `<label><input type="checkbox" value="${k}"> ${l}</label>`).join("")}</div>
-      <details class="style-box"><summary>Vertical style</summary>
-        <div class="seg" style="margin-top:8px">
-          <label><input type="radio" value="crop"> Zoom to fill</label>
-          <label><input type="radio" value="blur"> Blurred background</label>
+      <div class="card-head"><div><div class="tc"></div><div class="sub"></div></div><span class="badge st"></span></div>
+      <div class="kindrow"><span class="label kind"></span><span class="meter" title="Intensity"></span></div>
+      <div class="fieldset"><label class="label" for="t-${c.id}">Title</label><input id="t-${c.id}" class="f-title"></div>
+      <div class="fieldset"><label class="label" for="d-${c.id}">Description</label><textarea id="d-${c.id}" class="f-desc"></textarea></div>
+      <div class="fieldset"><label class="label" for="g-${c.id}">Tags</label><input id="g-${c.id}" class="f-tags" placeholder="comma separated"></div>
+      <div class="fieldset"><span class="label">Post to</span><div class="targets">${TARGETS.map(([k, l]) =>
+        `<label class="chip"><input type="checkbox" value="${k}">${l}</label>`).join("")}</div></div>
+      <details class="framing"><summary><span>Framing <span class="now"></span></span></summary>
+        <div class="fr-grid">
+          <canvas class="fr-preview" width="270" height="480" aria-label="Framing preview"></canvas>
+          <div class="fr-controls">
+            <div class="seg" role="radiogroup" aria-label="Vertical framing">
+              <label><input type="radio" name="fm-${c.id}" value="crop">Zoomed in</label>
+              <label><input type="radio" name="fm-${c.id}" value="blur">Full frame</label>
+            </div>
+            <div class="range"><label class="label" for="cx-${c.id}">Keep in frame</label>
+              <input type="range" id="cx-${c.id}" class="f-cropx" min="0" max="1" step="0.05">
+              <div class="ends"><span>Left</span><span>Center</span><span>Right</span></div></div>
+            <button class="btn small b-style">Apply to vertical clip</button>
+            <span class="hint">The preview shows the change before you apply it. Only the vertical version is re-made.</span>
+          </div>
         </div>
-        <div class="crop-pos">
-          <input class="f-cropx" type="range" min="0" max="1" step="0.05">
-          <div class="range-labels"><span>Left</span><span>Center</span><span>Right</span></div>
-        </div>
-        <button class="btn b-style" style="margin-top:6px">Apply to vertical</button>
       </details>
-      <details><summary>Adjust timing</summary>
-        <div class="row" style="margin-top:8px">
-          <input class="f-start" type="number" step="0.5" title="Start (seconds into the video)">
-          <input class="f-len" type="number" step="1" title="Length (seconds)">
-          <button class="btn b-recut">Re-cut</button>
+      <details class="timing"><summary><span>Timing <span class="now"></span></span></summary>
+        <div class="timing-row">
+          <div class="fieldset"><label class="label" for="s-${c.id}">Start (s)</label><input id="s-${c.id}" class="f-start" type="number" step="0.5"></div>
+          <div class="fieldset"><label class="label" for="l-${c.id}">Length (s)</label><input id="l-${c.id}" class="f-len" type="number" step="1"></div>
+          <button class="btn small b-recut">Re-cut</button>
         </div>
-        <div class="hint">Start (s) · Length (s)</div>
       </details>
       <div class="links"></div>
       <div class="err"></div>
-      <div class="row actions">
+      <div class="actions">
         <button class="btn primary b-approve">Approve &amp; post</button>
         <button class="btn danger b-reject">Reject</button>
         <button class="btn b-restore">Back to review</button>
       </div>
     </div>`;
-  el.querySelector(".f-title").value = c.title || "";
-  el.querySelector(".f-desc").value = c.description || "";
-  el.querySelector(".f-tags").value = c.tags || "";
-  el.querySelector(".f-start").value = c.start;
-  el.querySelector(".f-len").value = c.length;
-  // vertical style: each card gets its own radio group
-  const radios = el.querySelectorAll(".seg input");
-  radios.forEach(r => r.name = "vmode-" + c.id);
-  const mode = c.vertical_mode || S.settings.vertical_mode;
-  radios.forEach(r => r.checked = r.value === mode);
-  el.querySelector(".f-cropx").value = c.crop_x ?? 0.5;
-  const showPos = () => el.querySelector(".crop-pos").hidden =
-    el.querySelector(".seg input:checked")?.value !== "crop";
-  radios.forEach(r => r.addEventListener("change", showPos)); showPos();
-  el.querySelector(".b-style").onclick = async () => {
-    try {
-      await api(`/api/clips/${c.id}/style`, { ...meta(),
-        vertical_mode: el.querySelector(".seg input:checked").value,
-        crop_x: el.querySelector(".f-cropx").value });
-      el._kind = "vertical"; toast("Re-rendering the vertical version…"); refresh();
-    } catch (e) { toast(e.message); }
-  };
-
+  $(".f-title", el).value = c.title || "";
+  $(".f-desc", el).value = c.description || "";
+  $(".f-tags", el).value = c.tags || "";
+  $(".f-start", el).value = c.start;
+  $(".f-len", el).value = c.length;
   const defaults = S.settings.default_targets || [];
   el.querySelectorAll(".targets input").forEach(i => i.checked = defaults.includes(i.value));
+  el.querySelectorAll(".seg input").forEach(r => r.checked = r.value === modeOf(c));
+  $(".f-cropx", el).value = c.crop_x ?? 0.5;
 
-  const meta = () => ({ title: el.querySelector(".f-title").value, description: el.querySelector(".f-desc").value,
-                        tags: el.querySelector(".f-tags").value });
-  ["f-title", "f-desc", "f-tags"].forEach(cls => el.querySelector("." + cls).addEventListener("change",
+  const meta = () => ({ title: $(".f-title", el).value, description: $(".f-desc", el).value, tags: $(".f-tags", el).value });
+  [".f-title", ".f-desc", ".f-tags"].forEach(s => $(s, el).addEventListener("change",
     () => api(`/api/clips/${c.id}`, meta()).catch(e => toast(e.message))));
 
-  el.querySelector(".b-approve").onclick = async () => {
+  // framing preview: a still from the source video at the clip's peak, framed live
+  const pv = $(".fr-preview", el), pg = pv.getContext("2d");
+  const curMode = () => el.querySelector(".seg input:checked")?.value || "crop";
+  const drawPreview = () => {
+    $(".range", el).hidden = curMode() !== "crop";
+    if (el._img?.complete && el._img.naturalWidth)
+      paint(pg, 270, 480, el._img, el._img.naturalWidth, el._img.naturalHeight, curMode(), +$(".f-cropx", el).value);
+  };
+  $(".framing", el).addEventListener("toggle", () => {
+    if (!$(".framing", el).open || el._img) return drawPreview();
+    const cur = S.clips.find(x => x.id === c.id) || c;
+    el._img = new Image(); el._img.onload = drawPreview;
+    el._img.src = `/media/frame/${cur.video_id}?t=${(cur.start + cur.length * 0.65).toFixed(1)}`;
+    drawPreview();
+  });
+  el.querySelectorAll(".seg input").forEach(r => r.addEventListener("change", drawPreview));
+  $(".f-cropx", el).addEventListener("input", drawPreview);
+  $(".b-style", el).onclick = async () => {
+    try { await api(`/api/clips/${c.id}/style`, { ...meta(), vertical_mode: curMode(), crop_x: $(".f-cropx", el).value });
+          el._kind = "vertical"; toast("Re-making the vertical clip…"); refresh(); }
+    catch (e) { toast(e.message); }
+  };
+
+  $(".b-approve", el).onclick = async () => {
     const targets = [...el.querySelectorAll(".targets input:checked")].map(i => i.value);
     if (!targets.length) return toast("Tick at least one place to post");
     const names = TARGETS.filter(([k]) => targets.includes(k)).map(([, l]) => l).join(" + ");
@@ -341,11 +514,10 @@ function makeCard(c) {
     try { await api(`/api/clips/${c.id}/approve`, { ...meta(), targets }); toast("Queued for posting"); refresh(); }
     catch (e) { toast(e.message); }
   };
-  el.querySelector(".b-reject").onclick = () => api(`/api/clips/${c.id}/reject`).then(refresh);
-  el.querySelector(".b-restore").onclick = () => api(`/api/clips/${c.id}/restore`).then(refresh);
-  el.querySelector(".b-recut").onclick = async () => {
-    try { await api(`/api/clips/${c.id}/recut`, { ...meta(), start: el.querySelector(".f-start").value,
-                                                   length: el.querySelector(".f-len").value });
+  $(".b-reject", el).onclick = () => api(`/api/clips/${c.id}/reject`).then(refresh);
+  $(".b-restore", el).onclick = () => api(`/api/clips/${c.id}/restore`).then(refresh);
+  $(".b-recut", el).onclick = async () => {
+    try { await api(`/api/clips/${c.id}/recut`, { ...meta(), start: $(".f-start", el).value, length: $(".f-len", el).value });
           toast("Re-cutting…"); refresh(); } catch (e) { toast(e.message); }
   };
   el._kind = c.path_vertical ? "vertical" : "original";
@@ -353,7 +525,7 @@ function makeCard(c) {
 }
 
 function setVideo(el, c) {
-  const v = el.querySelector("video");
+  const v = $("video", el);
   const ver = c.status === "rendering" ? "" : (c.path_vertical || "") + (c.path_original || "") + c.start + c.length +
     (c.vertical_mode || "") + (c.crop_x ?? "");
   const key = el._kind + "|" + ver;
@@ -362,35 +534,33 @@ function setVideo(el, c) {
   if (c.status === "rendering") { v.removeAttribute("src"); v.load(); v.poster = ""; return; }
   v.poster = `/media/clip/${c.id}/thumb?v=${encodeURIComponent(ver)}`;
   v.src = `/media/clip/${c.id}/${el._kind}?v=${encodeURIComponent(ver)}`;
-  const tg = el.querySelector(".toggle");
+  const tg = $(".toggle", el);
   tg.innerHTML = ["vertical", "original"].filter(k => c["path_" + k]).map(k =>
     `<button data-k="${k}" class="${k === el._kind ? "on" : ""}">${k === "vertical" ? "9:16" : "Original"}</button>`).join("");
   tg.onclick = e => { const b = e.target.closest("button"); if (!b) return; el._kind = b.dataset.k; v._key = null; setVideo(el, c); };
 }
 
 function updateCard(el, c) {
-  const name = (c.video_path || "").split("/").pop();
-  const badge = { rendering: ["warn", "Cutting…"], pending: ["", "Needs review"], posting: ["warn", "Posting…"],
-                  posted: ["ok", "Posted"], post_failed: ["bad", "Post failed"], rejected: ["", "Rejected"],
-                  error: ["bad", "Error"] }[c.status] || ["", c.status];
-  el.querySelector(".meta").innerHTML = `<span class="badge ${badge[0]}">${badge[1]}</span>
-    ${esc(name)} · ${fmtT(c.start)}–${fmtT(c.start + c.length)} · intensity ${(c.score || 0).toFixed(1)}`;
-  el.querySelector(".links").innerHTML = [["yt_short_url", "YouTube Short"], ["yt_video_url", "YouTube video"],
-    ["ig_reel_url", "Instagram"]].filter(([k]) => c[k]).map(([k, l]) =>
-    `<a href="${esc(c[k])}" target="_blank" rel="noopener">${l} ↗</a>`).join("");
-  el.querySelector(".err").textContent = c.post_error || "";
-  // a target already posted to can't be posted again
+  const [cls, label] = STATUS[c.status] || ["", c.status];
+  const st = $(".st", el); st.className = "badge st " + cls; st.textContent = label;
+  $(".tc", el).textContent = `${fmtT(c.start)} – ${fmtT(c.start + c.length)}`;
+  $(".sub", el).textContent = (c.video_path || "").split("/").pop();
+  $(".kind", el).textContent = c.source === "manual" ? "Your pick" : "Found automatically";
+  $(".meter", el).innerHTML = meter(c.score);
+  $(".framing .now", el).textContent = "· " + (modeOf(c) === "crop" ? "zoomed in" : "full frame");
+  $(".timing .now", el).textContent = `· ${Math.round(c.length)} s`;
+  $(".links", el).innerHTML = [["yt_short_url", "YouTube Short"], ["yt_video_url", "YouTube video"], ["ig_reel_url", "Instagram"]]
+    .filter(([k]) => c[k]).map(([k, l]) => `<a href="${esc(c[k])}" target="_blank" rel="noopener">${l} ↗</a>`).join("");
+  $(".err", el).textContent = c.post_error || "";
   el.querySelectorAll(".targets input").forEach(i => { if (c[i.value + "_url"]) { i.checked = false; i.disabled = true; } });
   const busy = c.status === "rendering" || c.status === "posting";
-  el.querySelector(".b-approve").disabled = busy;
-  el.querySelector(".b-approve").hidden = c.status === "rejected" || c.status === "posted";
-  el.querySelector(".b-reject").hidden = c.status !== "pending" && c.status !== "post_failed" && c.status !== "error";
-  el.querySelector(".b-restore").hidden = c.status !== "rejected";
-  el.querySelector(".b-recut").disabled = busy;
-  el.querySelector(".b-style").disabled = busy;
+  const closed = c.status === "rejected" || c.status === "posted";
+  $(".b-approve", el).disabled = busy; $(".b-approve", el).hidden = closed;
+  $(".b-reject", el).hidden = !["pending", "post_failed", "error"].includes(c.status);
+  $(".b-restore", el).hidden = c.status !== "rejected";
+  $(".b-recut", el).disabled = busy; $(".b-style", el).disabled = busy;
   // re-cutting a rejected or posted clip would silently send it back to review
-  el.querySelectorAll("details").forEach(d => d.hidden = c.status === "rejected" || c.status === "posted");
-  if (c.status === "posted") el.querySelector(".b-approve").hidden = true;
+  el.querySelectorAll("details").forEach(d => d.hidden = closed);
   setVideo(el, c);
 }
 
@@ -415,45 +585,46 @@ function renderClips() {
 function renderLibrary() {
   $("#volumes").innerHTML = S.volumes.length
     ? "<span class='hint'>Connected drives:</span>" + S.volumes.map(v =>
-        `<button class="btn" data-vol="${esc(v)}">${esc(v.split("/").pop())}</button>`).join("")
-    : "<span class='hint'>No external drives detected — plug in your HDD.</span>";
+        `<button class="btn small" data-vol="${esc(v)}">${esc(v.split("/").pop())}</button>`).join("")
+    : "<span class='hint'>No external drives detected. Plug in your HDD.</span>";
   $("#sources").innerHTML = S.sources.length ? `<tr><th>Folder</th><th></th></tr>` + S.sources.map(s => `
     <tr><td class="path">${esc(s.path)}</td>
-    <td style="text-align:right;white-space:nowrap"><button class="btn" data-rescan="${s.id}">Re-scan</button>
-    <button class="btn danger" data-forget="${s.id}">Forget</button></td></tr>`).join("")
+    <td style="text-align:right;white-space:nowrap"><button class="btn small" data-rescan="${s.id}">Re-scan</button>
+    <button class="btn small danger" data-forget="${s.id}">Forget</button></td></tr>`).join("")
     : `<tr><td class="hint">No folders yet.</td></tr>`;
-  const label = { new: "Queued", analyzing: "Finding highlights", rendering: "Cutting clips", done: "Done", error: "Error" };
+  const label = { new: ["", "Queued"], analyzing: ["warn", "Finding highlights"], rendering: ["warn", "Cutting clips"], done: ["ok", "Done"], error: ["bad", "Error"] };
   $("#videos").innerHTML = S.videos.length ? `<tr><th>Video</th><th>Length</th><th>Size</th><th>Status</th><th>Clips</th><th></th></tr>` +
-    S.videos.slice().reverse().map(v => `<tr>
-      <td class="path">${esc(v.path.split("/").pop())}<div class="meta">${esc(v.path)}</div></td>
-      <td>${v.duration ? fmtT(v.duration) : "—"}</td><td>${fmtGB(v.size || 0)}</td>
-      <td>${label[v.status] || v.status}${["analyzing", "rendering"].includes(v.status)
-          ? `<div class="bar"><i style="width:${Math.round(v.progress * 100)}%"></i></div>` : ""}
+    S.videos.slice().reverse().map(v => { const [cls, l] = label[v.status] || ["", v.status]; return `<tr>
+      <td class="path">${esc(v.path.split("/").pop())}<div class="p">${esc(v.path)}</div></td>
+      <td class="num">${v.duration ? fmtT(v.duration) : "—"}</td><td class="num">${fmtGB(v.size || 0)}</td>
+      <td><span class="badge ${cls}">${l}</span>${["analyzing", "rendering"].includes(v.status)
+          ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.round(v.progress * 100)}%"></i></div>` : ""}
           ${v.error ? `<div class="err">${esc(v.error)}</div>` : ""}</td>
-      <td>${v.clips}</td>
-      <td>${["done", "error"].includes(v.status) ? `<button class="btn" data-retry="${v.id}">Re-process</button>` : ""}</td>
-    </tr>`).join("") : `<tr><td class="hint">No videos found yet.</td></tr>`;
+      <td class="num">${v.clips}</td>
+      <td style="text-align:right;white-space:nowrap">${v.status === "done" ? `<button class="btn small" data-studio="${v.id}">Open in Studio</button> ` : ""}
+        ${["done", "error"].includes(v.status) ? `<button class="btn small" data-retry="${v.id}">Re-process</button>` : ""}</td>
+    </tr>`; }).join("") : `<tr><td class="hint">No videos yet.</td></tr>`;
 }
 
 document.addEventListener("click", async e => {
-  const t = e.target.closest("[data-vol],[data-rescan],[data-forget],[data-retry]"); if (!t) return;
+  const t = e.target.closest("[data-vol],[data-rescan],[data-forget],[data-retry],[data-studio]"); if (!t) return;
   try {
     if (t.dataset.vol) { $("#src-path").value = t.dataset.vol; $("#src-path").focus(); }
     if (t.dataset.rescan) { await api(`/api/sources/${t.dataset.rescan}/scan`); toast("Scanning…"); }
     if (t.dataset.forget && confirm("Stop tracking this folder? (Nothing on the drive is deleted.)"))
       await api(`/api/sources/${t.dataset.forget}`, undefined, "DELETE");
-    if (t.dataset.retry && confirm("Re-process this video? Un-reviewed clips from it will be replaced."))
+    if (t.dataset.retry && confirm("Re-process this video? Un-reviewed automatic clips from it will be replaced. Your own picks stay."))
       await api(`/api/videos/${t.dataset.retry}/retry`);
+    if (t.dataset.studio) { ST.vid = null; $("#st-video").value = t.dataset.studio; show("studio"); studioLoad(+t.dataset.studio); }
     refresh();
   } catch (err) { toast(err.message); }
 });
 
 $("#add-src").onclick = async () => {
   try { await api("/api/sources", { path: $("#src-path").value }); $("#src-path").value = "";
-        toast("Folder added — scanning for videos"); refresh(); } catch (e) { toast(e.message); }
+        toast("Folder added. Scanning for videos."); refresh(); } catch (e) { toast(e.message); }
 };
 $("#src-path").addEventListener("keydown", e => { if (e.key === "Enter") $("#add-src").click(); });
-// Dropping a Finder folder into the box gives its path
 $("#src-path").addEventListener("drop", e => {
   const txt = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text/uri-list");
   if (txt) { e.preventDefault(); $("#src-path").value = decodeURIComponent(txt.replace(/^file:\/\//, "").trim()); }
@@ -478,8 +649,7 @@ function uploadFiles(files) {
     uploading = false; $("#up-status").hidden = true; $("#up-files").value = "";
     let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
     if (xhr.status === 200) {
-      toast(`Added ${r.added.length} video(s) — cutting clips now` +
-            (r.skipped.length ? ` · skipped ${r.skipped.length} non-video file(s)` : ""));
+      toast(`Added ${r.added.length} video(s). Cutting clips now.` + (r.skipped.length ? ` Skipped ${r.skipped.length} non-video file(s).` : ""));
       refresh();
     } else toast(r.error || "Upload failed");
   };
@@ -494,31 +664,31 @@ drop.addEventListener("drop", e => { e.preventDefault(); uploadFiles(e.dataTrans
 // ---------- settings ----------
 const SETTING_KEYS = ["clip_length", "minutes_per_clip", "max_clips_per_video", "min_score", "vertical_mode",
   "output_dir", "yt_privacy", "yt_category", "default_tags", "description_template"];
-
 function renderSettings() {
   const a = S.accounts;
-  $("#yt-status").innerHTML = a.youtube ? `✅ Connected to <b>${esc(a.youtube)}</b>`
+  $("#yt-dot").classList.toggle("on", !!a.youtube); $("#ig-dot").classList.toggle("on", !!a.instagram);
+  $("#yt-status").innerHTML = a.youtube ? `Connected to <b>${esc(a.youtube)}</b>`
     : S.youtube_client_ready ? "OAuth client uploaded. Click “Sign in with Google”."
     : "Not connected. Upload your Google OAuth client JSON (see README), then sign in.";
   $("#yt-connect").hidden = !!a.youtube; $("#yt-disconnect").hidden = !a.youtube;
   $("#yt-file").hidden = $("#yt-upload").hidden = !!a.youtube;
-  $("#ig-status").innerHTML = a.instagram ? `✅ Connected to <b>${esc(a.instagram)}</b>`
+  $("#ig-status").innerHTML = a.instagram ? `Connected to <b>${esc(a.instagram)}</b>`
     : "Not connected. Needs an Instagram Business or Creator account (see README).";
   if (!settingsLoaded) {
     settingsLoaded = true;
     for (const k of [...SETTING_KEYS, "ig_user_id", "ig_token", "ig_api_host"]) $("#s-" + k).value = S.settings[k] ?? "";
+    $("#sel-mode").value = S.settings.vertical_mode;
   }
 }
-
 $("#save-settings").onclick = async () => {
   const body = {}; SETTING_KEYS.forEach(k => body[k] = $("#s-" + k).value);
-  try { await api("/api/settings", body); toast("Settings saved"); } catch (e) { toast(e.message); }
+  try { await api("/api/settings", body); toast("Settings saved"); refresh(); } catch (e) { toast(e.message); }
 };
 $("#ig-save").onclick = async () => {
   try {
     const r = await api("/api/settings", { ig_user_id: $("#s-ig_user_id").value.trim(),
       ig_token: $("#s-ig_token").value.trim(), ig_api_host: $("#s-ig_api_host").value });
-    toast(r.accounts.instagram ? "Instagram connected: " + r.accounts.instagram : "Couldn't connect — check the ID and token");
+    toast(r.accounts.instagram ? "Instagram connected: " + r.accounts.instagram : "Couldn't connect. Check the ID and token.");
     refresh();
   } catch (e) { toast(e.message); }
 };
@@ -526,7 +696,7 @@ $("#ig-disconnect").onclick = async () => { await api("/api/instagram/disconnect
 $("#yt-upload").onclick = async () => {
   const f = $("#yt-file").files[0]; if (!f) return toast("Choose the JSON file first");
   const fd = new FormData(); fd.append("file", f);
-  try { await api("/api/youtube/client", fd); toast("Uploaded — now sign in"); refresh(); } catch (e) { toast(e.message); }
+  try { await api("/api/youtube/client", fd); toast("Uploaded. Now sign in."); refresh(); } catch (e) { toast(e.message); }
 };
 $("#yt-connect").onclick = async () => {
   toast("Finish signing in in the browser window that just opened…");
@@ -535,15 +705,198 @@ $("#yt-connect").onclick = async () => {
 };
 $("#yt-disconnect").onclick = async () => { await api("/api/youtube/disconnect"); refresh(); };
 
-// ---------- loop ----------
-async function refresh() {
-  try { S = await (await fetch("/api/state")).json(); } catch { $("#activity").textContent = "⚠️ App not running"; return; }
-  const q = S.queue;
-  $("#activity").innerHTML = `Cutting: ${esc(S.activity.process)}${q.process ? ` (+${q.process} queued)` : ""}<br>
-    Posting: ${esc(S.activity.post)}${q.post ? ` (+${q.post} queued)` : ""}`;
-  renderClips(); renderLibrary(); renderSettings();
+// ---------- studio: scrub the graph, pick your own clips ----------
+const ST = { vid: null, duration: 0, score: null, sel: null, scoreTimer: null };
+const player = $("#st-player"), chart = $("#chart");
+let hoverT = null, dragging = false, seekBusy = false, seekNext = null, rangeEnd = null;
+
+function doneVideos() { return (S?.videos || []).filter(v => v.status === "done"); }
+function renderStudioSelect() {
+  const vids = doneVideos(), sel = $("#st-video");
+  const sig = vids.map(v => v.id).join(",");
+  if (sel._sig !== sig) {
+    sel._sig = sig;
+    sel.innerHTML = vids.slice().reverse().map(v => `<option value="${v.id}">${esc(v.path.split("/").pop())} · ${fmtT(v.duration)}</option>`).join("");
+    if (ST.vid) sel.value = ST.vid;
+  }
+  $("#st-empty").hidden = vids.length > 0;
+  $("#st-body").hidden = !ST.vid;
 }
-refresh(); setInterval(refresh, 3000);
+function studioEnter() {
+  renderStudioSelect();
+  if (ST.vid || !doneVideos().length) return;
+  let want = null; try { want = +localStorage.getItem("studioVideo"); } catch {}
+  const v = doneVideos().find(x => x.id === want) || doneVideos().at(-1);
+  $("#st-video").value = v.id; studioLoad(v.id);
+}
+$("#st-video").addEventListener("change", e => studioLoad(+e.target.value));
+
+function studioLoad(vid) {
+  const v = S.videos.find(x => x.id === vid); if (!v) return;
+  ST.vid = vid; ST.duration = v.duration || 0; ST.score = null; ST.sel = null;
+  try { localStorage.setItem("studioVideo", vid); } catch {}
+  $("#st-body").hidden = false;
+  $("#st-info").textContent = `${fmtT(v.duration)} · ${v.width}×${v.height}`;
+  player.src = `/media/video/${vid}`;
+  setSel(Math.min(clipLen() / 2, ST.duration / 2), false);
+  renderStudioClips(); drawChart(); fetchScore(vid);
+}
+async function fetchScore(vid) {
+  clearTimeout(ST.scoreTimer);
+  try {
+    const r = await api(`/api/videos/${vid}/score`, undefined, "GET");
+    if (ST.vid !== vid) return;
+    if (r.score) { ST.score = r.score; $("#st-chart-label").textContent = "Intensity · drag across it to scrub the video"; drawChart(); return; }
+    $("#st-chart-label").textContent = "Building the graph for this video… you can already scrub";
+  } catch {}
+  ST.scoreTimer = setTimeout(() => fetchScore(vid), 4000);
+}
+const clipLen = () => Math.min(+$("#sel-len").value, Math.max(1, ST.duration - 0.1));
+const studioClips = () => (S?.clips || []).filter(c => c.video_id === ST.vid && c.status !== "rejected");
+
+function drawChart() {
+  if (!ST.vid) return;
+  const n = Math.max(1, Math.floor(ST.duration)), score = ST.score;
+  const dpr = window.devicePixelRatio || 1, w = chart.clientWidth, h = chart.clientHeight;
+  if (!w) return;
+  chart.width = w * dpr; chart.height = h * dpr;
+  const g = chart.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const padB = 20, top = 6, H = h - padB - top, lo = -3, hi = score ? Math.max(4, ...score) : 4;
+  const X = t => t / n * w, Y = v => top + H - (clamp(v, lo, hi) - lo) / (hi - lo) * H;
+  const accent = css("--accent"), soft = css("--accent-soft"), sel = css("--sel"), selSoft = css("--sel-soft");
+  const line = css("--line"), muted = css("--muted"), ink = css("--ink");
+  g.fillStyle = css("--sunk"); g.fillRect(0, top, w, H);
+  for (const c of studioClips()) {
+    g.fillStyle = soft; g.fillRect(X(c.start), top, Math.max(2, X(c.length)), H);
+    g.strokeStyle = accent; g.lineWidth = 1; g.strokeRect(X(c.start) + .5, top + .5, Math.max(2, X(c.length)) - 1, H - 1);
+  }
+  if (ST.sel) {
+    g.fillStyle = selSoft; g.fillRect(X(ST.sel.start), top, Math.max(2, X(ST.sel.length)), H);
+    g.strokeStyle = sel; g.lineWidth = 2; g.strokeRect(X(ST.sel.start) + 1, top + 1, Math.max(3, X(ST.sel.length)) - 2, H - 2);
+  }
+  if (score) {
+    g.strokeStyle = line; g.setLineDash([3, 4]); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, Y(S.settings.min_score)); g.lineTo(w, Y(S.settings.min_score)); g.stroke(); g.setLineDash([]);
+    const step = Math.max(1, Math.floor(n / w)), pts = [];
+    for (let i = 0; i < n; i += step) { let m = -Infinity; for (let k = i; k < Math.min(n, i + step); k++) m = Math.max(m, score[k] ?? lo); pts.push([X(i), Y(m)]); }
+    g.beginPath(); g.moveTo(0, Y(lo)); pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(w, Y(lo)); g.closePath();
+    g.globalAlpha = .18; g.fillStyle = accent; g.fill(); g.globalAlpha = 1;
+    g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+    g.strokeStyle = accent; g.lineWidth = 1.5; g.stroke();
+  } else {
+    g.fillStyle = muted; g.font = `500 12px ${css("--f-body")}`; g.textAlign = "center";
+    g.fillText("Building the graph… you can already scrub", w / 2, top + H / 2);
+  }
+  g.fillStyle = muted; g.font = `500 11px ${css("--f-mono")}`;
+  const ticks = Math.max(2, Math.min(10, Math.floor(w / 90)));
+  for (let i = 0; i <= ticks; i++) {
+    const t = n * i / ticks; g.textAlign = i === 0 ? "left" : i === ticks ? "right" : "center"; g.fillText(fmtT(t), X(t), h - 4);
+  }
+  const x = X(player.currentTime || 0);
+  g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.moveTo(x, top); g.lineTo(x, top + H); g.stroke();
+  if (hoverT != null) {
+    const hx = X(hoverT); g.strokeStyle = muted; g.lineWidth = 1; g.setLineDash([2, 3]);
+    g.beginPath(); g.moveTo(hx, top); g.lineTo(hx, top + H); g.stroke(); g.setLineDash([]);
+    const label = fmtT(hoverT), tw = g.measureText(label).width + 10, bx = clamp(hx - tw / 2, 0, w - tw);
+    g.fillStyle = ink; g.fillRect(bx, top, tw, 17); g.fillStyle = css("--surface"); g.textAlign = "center"; g.fillText(label, bx + tw / 2, top + 12);
+  }
+}
+function setSel(center, redraw = true) {
+  if (!ST.duration) return;
+  const len = clipLen(), start = clamp(center - len / 2, 0, Math.max(0, ST.duration - len));
+  ST.sel = { start: Math.round(start * 2) / 2, length: len };
+  $("#sel-tc").textContent = `${fmtT(ST.sel.start)} – ${fmtT(ST.sel.start + len)}`;
+  chart.setAttribute("aria-valuetext", `Selected ${fmtT(ST.sel.start)} to ${fmtT(ST.sel.start + len)}`);
+  if (redraw) drawChart();
+}
+function seekPlayer(t, exact) {
+  if (seekBusy && !exact) { seekNext = t; return; }
+  seekBusy = true; seekNext = null;
+  if (!exact && player.fastSeek) player.fastSeek(t); else player.currentTime = t;
+}
+player.addEventListener("seeked", () => { seekBusy = false; if (seekNext != null) seekPlayer(seekNext); drawChart(); });
+player.addEventListener("timeupdate", () => {
+  if (rangeEnd != null && player.currentTime >= rangeEnd) { player.pause(); rangeEnd = null; }
+  if (!dragging) drawChart();
+});
+player.addEventListener("pause", () => { rangeEnd = null; });
+const tAt = e => { const r = chart.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width, 0, 1) * ST.duration; };
+chart.addEventListener("pointerdown", e => {
+  if (!ST.duration) return;
+  dragging = true; try { chart.setPointerCapture(e.pointerId); } catch {}
+  player.pause(); const t = tAt(e); setSel(t); seekPlayer(t);
+});
+chart.addEventListener("pointermove", e => {
+  if (!ST.duration) return;
+  const t = tAt(e);
+  if (dragging) { setSel(t); seekPlayer(t); hoverT = null; }
+  else if (e.pointerType === "mouse") { hoverT = t; drawChart(); }
+});
+chart.addEventListener("pointerup", e => { if (!dragging) return; dragging = false; const t = tAt(e); setSel(t); seekPlayer(t, true); });
+chart.addEventListener("pointercancel", () => { dragging = false; });
+chart.addEventListener("pointerleave", () => { if (hoverT != null) { hoverT = null; drawChart(); } });
+chart.addEventListener("keydown", e => {
+  if (!ST.sel) return;
+  const step = e.shiftKey ? 5 : 1, midT = ST.sel.start + ST.sel.length / 2;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault(); setSel(clamp(midT + (e.key === "ArrowLeft" ? -step : step), 0, ST.duration)); seekPlayer(ST.sel.start, true);
+  } else if (e.key === "Enter") { e.preventDefault(); addSelection(); }
+});
+$("#nudge-back").onclick = () => { if (ST.sel) { setSel(ST.sel.start + ST.sel.length / 2 - 5); seekPlayer(ST.sel.start, true); } };
+$("#nudge-fwd").onclick = () => { if (ST.sel) { setSel(ST.sel.start + ST.sel.length / 2 + 5); seekPlayer(ST.sel.start, true); } };
+$("#sel-len").addEventListener("change", () => ST.sel && setSel(ST.sel.start + ST.sel.length / 2));
+$("#play-sel").onclick = () => { if (!ST.sel) return; rangeEnd = ST.sel.start + ST.sel.length; player.currentTime = ST.sel.start; player.play().catch(() => {}); };
+$("#add-sel").onclick = addSelection;
+async function addSelection() {
+  if (!ST.sel || !ST.vid) return;
+  const dup = studioClips().find(c => Math.abs(c.start - ST.sel.start) < 1 && Math.abs(c.length - ST.sel.length) < 1);
+  if (dup) return toast("That clip is already in your list.");
+  try {
+    await api(`/api/videos/${ST.vid}/clips`, { start: ST.sel.start, length: ST.sel.length, vertical_mode: $("#sel-mode").value });
+    const busy = S.activity.process !== "Idle";
+    toast(`Added ${fmtT(ST.sel.start)} – ${fmtT(ST.sel.start + ST.sel.length)}. It goes to the front of the line and appears in Review ` +
+          (busy ? "right after the current job finishes." : "in about a minute."));
+    refresh();
+  } catch (e) { toast(e.message); }
+}
+function renderStudioClips() {
+  const list = studioClips().sort((a, b) => a.start - b.start);
+  $("#st-clips-panel").hidden = !ST.vid || !list.length;
+  const sig = list.map(c => c.id + c.status + (c.thumb || "")).join("|");
+  const box = $("#st-clips"); if (box._sig === sig) return; box._sig = sig;
+  box.innerHTML = list.map(c => {
+    const [cls, label] = STATUS[c.status] || ["", c.status];
+    return `<button class="st-clip" data-goto="${c.id}">
+      ${c.thumb && c.status !== "rendering" ? `<img src="/media/clip/${c.id}/thumb?v=${encodeURIComponent(c.start + "" + c.length + (c.vertical_mode || "") + (c.crop_x ?? ""))}" alt="">` : `<div class="ph">Cutting…</div>`}
+      <span class="t">${fmtT(c.start)} – ${fmtT(c.start + c.length)}</span>
+      <span class="row" style="gap:6px"><span class="badge ${cls}">${label}</span><span class="label">${c.source === "manual" ? "Your pick" : "Auto"}</span></span>
+    </button>`; }).join("");
+}
+$("#st-clips").addEventListener("click", e => {
+  const b = e.target.closest("[data-goto]"); if (!b) return;
+  const c = S.clips.find(x => x.id === +b.dataset.goto); if (!c) return;
+  const view = bucket(c) || "review"; show(view);
+  setTimeout(() => $("#clip-" + c.id)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+});
+window.addEventListener("resize", drawChart);
+
+// ---------- loop ----------
+function setAct(id, text) { const el = $(id); el.lastElementChild.textContent = text; el.classList.toggle("busy", text !== "Idle"); }
+async function refresh() {
+  try { S = await (await fetch("/api/state")).json(); }
+  catch { setAct("#act-process", "App not running"); return; }
+  const q = S.queue;
+  setAct("#act-process", S.activity.process + (q.process ? ` (+${q.process} queued)` : ""));
+  setAct("#act-post", S.activity.post + (q.post ? ` (+${q.post} queued)` : ""));
+  renderClips(); renderLibrary(); renderSettings(); renderStudioSelect();
+  if (ST.vid) { renderStudioClips(); if (!dragging) drawChart(); }
+}
+(async () => {
+  await refresh();
+  let v = "review"; try { v = localStorage.getItem("view") || v; } catch {}
+  show(v);
+  setInterval(refresh, 3000);
+})();
 </script>
 </body>
 </html>
