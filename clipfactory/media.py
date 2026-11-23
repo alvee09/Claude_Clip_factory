@@ -100,8 +100,10 @@ def intensity_curve(path, info, on_progress=lambda p: None):
             cmd += ["-map", "0:a:0", "-ac", "1", "-ar", str(SAMPLE_RATE),
                     "-f", "s16le", "-y", str(audio_raw)]
         if info["has_video"]:
+            # scdet (unlike select) passes every frame on, so ffmpeg keeps reporting progress
             cmd += ["-map", "0:v:0", "-an", "-vf",
-                    f"fps=4,scale=160:-2,select='gt(scene,0.3)',metadata=print:file={scenes_txt}",
+                    f"fps=4,scale=160:-2,scdet=threshold=15,"
+                    f"metadata=print:key=lavfi.scd.time:file={scenes_txt}",
                     "-f", "null", "-"]
         _run_with_progress(cmd, info["duration"], on_progress)
 
