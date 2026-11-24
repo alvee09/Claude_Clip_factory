@@ -88,7 +88,8 @@ def _render_clip(clip, video, s, kinds=None):
         out = folder / f"clip{clip['idx']:02d}_{kind}.mp4"
         activity["process"] = f"Rendering clip {clip['idx']} ({kind}) of {Path(video['path']).name}"
         media.render(video["path"], clip["start"], clip["length"], out, kind, s,
-                     vertical_mode=clip.get("vertical_mode"), crop_x=clip.get("crop_x"))
+                     vertical_mode=clip.get("vertical_mode"), crop_x=clip.get("crop_x"),
+                     aspect=clip.get("aspect"))
         paths[f"path_{kind}"] = str(out)
     thumb = folder / f"clip{clip['idx']:02d}_thumb.jpg"
     source = paths.get("path_vertical") or clip.get("path_vertical") \
@@ -97,16 +98,16 @@ def _render_clip(clip, video, s, kinds=None):
     db.update("clips", clip["id"], status="pending", thumb=str(thumb), **paths)
 
 
-def new_clip(video, start, length, score, source, s, vertical_mode=None, crop_x=0.5):
+def new_clip(video, start, length, score, source, s, vertical_mode=None, crop_x=0.5, aspect=None):
     """Insert a clip row (status 'rendering') and return its id. Numbers never repeat
     within a video, so a new clip can't overwrite an older clip's files."""
     idx = (db.one("SELECT MAX(idx) AS m FROM clips WHERE video_id = ?", (video["id"],))["m"] or 0) + 1
     title = _default_title(video["path"], idx)
     return db.x(
         "INSERT INTO clips (video_id, idx, start, length, score, title, description, tags, added, "
-        "source, vertical_mode, crop_x) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "source, vertical_mode, crop_x, aspect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (video["id"], idx, start, length, score, title, s["description_template"], s["default_tags"],
-         db.now(), source, vertical_mode, crop_x))
+         db.now(), source, vertical_mode, crop_x, aspect))
 
 
 # ---------- intensity graph ----------

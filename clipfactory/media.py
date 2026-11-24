@@ -172,9 +172,15 @@ def pick_moments(score, duration, settings):
     return moments
 
 
+# Shapes for the social version of a clip, as output width x height.
+ASPECTS = {"9:16": (1080, 1920),   # Reels, Shorts, TikTok
+           "4:5": (1080, 1350),    # Instagram feed post
+           "1:1": (1080, 1080)}    # square
+
+
 def render(src, start, length, out, kind, settings, vertical_mode=None, crop_x=0.5,
-           on_progress=lambda p: None):
-    """kind: 'vertical' (1080x1920 for Shorts/Reels) or 'original'.
+           aspect=None, on_progress=lambda p: None):
+    """kind: 'vertical' (the social version, shaped by aspect: 9:16, 4:5 or 1:1) or 'original'.
 
     vertical_mode: 'blur' (whole frame on a blurred background) or 'crop' (zoom to
     fill the screen; crop_x picks which part stays: 0 = left, 0.5 = center, 1 = right).
@@ -182,15 +188,16 @@ def render(src, start, length, out, kind, settings, vertical_mode=None, crop_x=0
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if kind == "vertical":
+        w, h = ASPECTS.get(aspect or settings.get("aspect"), ASPECTS["9:16"])
         if (vertical_mode or settings["vertical_mode"]) == "crop":
             x = min(max(float(crop_x if crop_x is not None else 0.5), 0.0), 1.0)
-            vf = ("scale=1080:1920:force_original_aspect_ratio=increase,"
-                  f"crop=1080:1920:(iw-ow)*{x:.3f}:(ih-oh)/2,setsar=1")
+            vf = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                  f"crop={w}:{h}:(iw-ow)*{x:.3f}:(ih-oh)/2,setsar=1")
         else:
             vf = ("split[a][b];"
-                  "[a]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
-                  "boxblur=10:2,scale=1080:1920[bg];"
-                  "[b]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
+                  f"[a]scale={w // 4}:{h // 4}:force_original_aspect_ratio=increase,crop={w // 4}:{h // 4},"
+                  f"boxblur=10:2,scale={w}:{h}[bg];"
+                  f"[b]scale={w}:{h}:force_original_aspect_ratio=decrease[fg];"
                   "[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
     else:
         vf = "scale='min(1920,iw)':-2,setsar=1"

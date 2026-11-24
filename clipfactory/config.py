@@ -24,6 +24,7 @@ DEFAULTS = {
     "min_score": 1.2,           # how "intense" a moment must be (higher = pickier)
     # Rendering
     "formats": ["vertical", "original"],
+    "aspect": "9:16",           # shape of the social version: "9:16" Reels/Shorts, "4:5" Instagram post, "1:1" square
     "vertical_mode": "crop",    # "crop" = zoom to fill, centered on gameplay; "blur" = full frame on blurred background
     "crf": 20,
     "preset": "veryfast",

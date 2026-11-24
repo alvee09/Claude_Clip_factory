@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS clips (
     source TEXT DEFAULT 'auto', -- auto = found by the app, manual = picked on the graph
     cover_wide TEXT,           -- your 16:9 thumbnail (used for YouTube)
     cover_tall TEXT,           -- your 9:16 cover
-    cover_t REAL               -- seconds into the clip of the cover's frame (used for Instagram)
+    cover_t REAL,              -- seconds into the clip of the cover's frame (used for Instagram)
+    aspect TEXT                -- 9:16 / 4:5 / 1:1; NULL = use the default from settings
 );
 """
 
@@ -63,6 +64,7 @@ MIGRATIONS = [
     ("clips", "cover_wide", "TEXT"),
     ("clips", "cover_tall", "TEXT"),
     ("clips", "cover_t", "REAL"),
+    ("clips", "aspect", "TEXT"),
 ]
 
 

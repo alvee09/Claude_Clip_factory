@@ -177,9 +177,12 @@ def add_clip(vid):
     mode = body.get("vertical_mode")
     if mode not in (None, "blur", "crop"):
         return _err("Unknown vertical style")
+    aspect = body.get("aspect")
+    if aspect not in (None, *media.ASPECTS):
+        return _err("Unknown shape")
     score = worker.load_score(vid) or []
     peak = max(score[int(start):int(start + length)] or [0])
-    cid = worker.new_clip(video, round(start, 2), length, peak, "manual", config.load(), mode, crop_x)
+    cid = worker.new_clip(video, round(start, 2), length, peak, "manual", config.load(), mode, crop_x, aspect)
     worker.process_q.put(("recut", cid))
     return jsonify({"id": cid})
 
@@ -277,7 +280,7 @@ def recut(cid):
 
 @app.post("/api/clips/<int:cid>/style")
 def restyle(cid):
-    """Change how the vertical version is framed and re-render just that version."""
+    """Change the social version's shape and framing, and re-render just that version."""
     clip = _clip_or_404(cid)
     if clip["status"] in ("rendering", "posting"):
         return _err("This clip is busy — try again in a moment")
@@ -285,12 +288,15 @@ def restyle(cid):
     mode = body.get("vertical_mode")
     if mode not in ("blur", "crop"):
         return _err("Unknown vertical style")
+    aspect = body.get("aspect", clip["aspect"])
+    if aspect not in (None, *media.ASPECTS):
+        return _err("Unknown shape")
     try:
         crop_x = min(max(float(body.get("crop_x", 0.5)), 0.0), 1.0)
     except (TypeError, ValueError):
         return _err("Position must be a number between 0 and 1")
     _save_meta(cid, body)
-    db.update("clips", cid, vertical_mode=mode, crop_x=crop_x, status="rendering", post_error=None)
+    db.update("clips", cid, vertical_mode=mode, crop_x=crop_x, aspect=aspect, status="rendering", post_error=None)
     worker.process_q.put(("recut", cid, ["vertical"]))
     return jsonify({"ok": True})
 

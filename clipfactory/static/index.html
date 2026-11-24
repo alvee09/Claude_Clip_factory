@@ -122,9 +122,10 @@
   details[open] summary::after { content: "–"; }
   details summary .now { color: var(--muted); font-weight: 400; margin-left: 6px; }
   .fr-grid { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; margin-top: 10px; align-items: start; }
-  .fr-grid canvas { width: 112px; height: 199px; background: #000; border-radius: 6px; display: block; }
+  .fr-grid canvas { width: 112px; height: auto; aspect-ratio: 9 / 16; background: #000; border-radius: 6px; display: block; }
   .fr-controls { display: grid; gap: 9px; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg.seg3 { grid-template-columns: repeat(3, 1fr); }
   .seg label { position: relative; text-align: center; font-size: 12.5px; padding: 7px 4px; cursor: pointer; background: var(--surface); }
   .seg label + label { border-left: 1px solid var(--line); }
   .seg input { position: absolute; opacity: 0; pointer-events: none; }
@@ -261,6 +262,7 @@
               <span class="tc"><span class="label">Selected</span><b id="sel-tc">0:00 – 0:30</b></span>
               <select id="sel-len" aria-label="Clip length"><option value="15">15 s</option><option value="20">20 s</option>
                 <option value="30" selected>30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
+              <select id="sel-aspect" aria-label="Shape"><option value="9:16">9:16 Reel</option><option value="4:5">4:5 Post</option><option value="1:1">1:1 Square</option></select>
               <select id="sel-mode" aria-label="Vertical framing"><option value="crop">Zoomed in</option><option value="blur">Full frame</option></select>
               <button class="btn small" id="nudge-back" aria-label="Move 5 seconds earlier">−5 s</button>
               <button class="btn small" id="nudge-fwd" aria-label="Move 5 seconds later">+5 s</button>
@@ -347,6 +349,8 @@
           <label for="s-minutes_per_clip">One clip per N minutes of footage</label><input id="s-minutes_per_clip" type="number" min="1">
           <label for="s-max_clips_per_video">Max clips per video</label><input id="s-max_clips_per_video" type="number" min="1">
           <label for="s-min_score">Pickiness (1 = loose, 2.5 = strict)</label><input id="s-min_score" type="number" step="0.1">
+          <label for="s-aspect">Shape of social clips</label>
+          <select id="s-aspect"><option value="9:16">9:16 · Reels, Shorts, TikTok</option><option value="4:5">4:5 · Instagram feed post</option><option value="1:1">1:1 · Square</option></select>
           <label for="s-vertical_mode">Vertical framing</label>
           <select id="s-vertical_mode"><option value="crop">Zoomed in, centered on gameplay</option><option value="blur">Full frame on blurred background</option></select>
           <label for="s-output_dir">Output folder</label><input id="s-output_dir">
@@ -436,6 +440,9 @@ function bucket(c) {
   return "review";
 }
 const modeOf = c => c.vertical_mode || S.settings.vertical_mode;
+const aspectOf = c => c.aspect || S.settings.aspect || "9:16";
+const ASPECTS = [["9:16", "9:16 Reel"], ["4:5", "4:5 Post"], ["1:1", "1:1 Square"]];
+const ASPECT_HINT = { "9:16": "Reels, Shorts, TikTok", "4:5": "Instagram feed post", "1:1": "Square, works everywhere" };
 
 function makeCard(c) {
   const el = document.createElement("article");
@@ -454,15 +461,17 @@ function makeCard(c) {
         <div class="fr-grid">
           <canvas class="fr-preview" width="270" height="480" aria-label="Framing preview"></canvas>
           <div class="fr-controls">
-            <div class="seg" role="radiogroup" aria-label="Vertical framing">
+            <div class="seg seg3 seg-aspect" role="radiogroup" aria-label="Shape">${ASPECTS.map(([v, l]) =>
+              `<label title="${ASPECT_HINT[v]}"><input type="radio" name="fa-${c.id}" value="${v}">${l}</label>`).join("")}</div>
+            <div class="seg seg-mode" role="radiogroup" aria-label="Framing">
               <label><input type="radio" name="fm-${c.id}" value="crop">Zoomed in</label>
               <label><input type="radio" name="fm-${c.id}" value="blur">Full frame</label>
             </div>
             <div class="range"><label class="label" for="cx-${c.id}">Keep in frame</label>
               <input type="range" id="cx-${c.id}" class="f-cropx" min="0" max="1" step="0.05">
               <div class="ends"><span>Left</span><span>Center</span><span>Right</span></div></div>
-            <button class="btn small b-style">Apply to vertical clip</button>
-            <span class="hint">The preview shows the change before you apply it. Only the vertical version is re-made.</span>
+            <button class="btn small b-style">Apply to social clip</button>
+            <span class="hint">The preview shows the change before you apply it. Only the social version is re-made; the original stays as it is.</span>
           </div>
         </div>
       </details>
@@ -512,7 +521,8 @@ function makeCard(c) {
   $(".f-len", el).value = c.length;
   const defaults = S.settings.default_targets || [];
   el.querySelectorAll(".targets input").forEach(i => i.checked = defaults.includes(i.value));
-  el.querySelectorAll(".framing .seg input").forEach(r => r.checked = r.value === modeOf(c));
+  el.querySelectorAll(".framing .seg-mode input").forEach(r => r.checked = r.value === modeOf(c));
+  el.querySelectorAll(".framing .seg-aspect input").forEach(r => r.checked = r.value === aspectOf(c));
   $(".f-cropx", el).value = c.crop_x ?? 0.5;
 
   const meta = () => ({ title: $(".f-title", el).value, description: $(".f-desc", el).value, tags: $(".f-tags", el).value });
@@ -521,11 +531,14 @@ function makeCard(c) {
 
   // framing preview: a still from the source video at the clip's peak, framed live
   const pv = $(".fr-preview", el), pg = pv.getContext("2d");
-  const curMode = () => el.querySelector(".framing .seg input:checked")?.value || "crop";
+  const curMode = () => el.querySelector(".framing .seg-mode input:checked")?.value || "crop";
+  const curAspect = () => el.querySelector(".framing .seg-aspect input:checked")?.value || "9:16";
   const drawPreview = () => {
     $(".range", el).hidden = curMode() !== "crop";
+    const [aw, ah] = curAspect().split(":").map(Number);
+    pv.width = 270; pv.height = Math.round(270 * ah / aw); pv.style.aspectRatio = `${aw} / ${ah}`;
     if (el._img?.complete && el._img.naturalWidth)
-      paint(pg, 270, 480, el._img, el._img.naturalWidth, el._img.naturalHeight, curMode(), +$(".f-cropx", el).value);
+      paint(pg, pv.width, pv.height, el._img, el._img.naturalWidth, el._img.naturalHeight, curMode(), +$(".f-cropx", el).value);
   };
   $(".framing", el).addEventListener("toggle", () => {
     if (!$(".framing", el).open || el._img) return drawPreview();
@@ -535,9 +548,10 @@ function makeCard(c) {
     drawPreview();
   });
   el.querySelectorAll(".framing .seg input").forEach(r => r.addEventListener("change", () => { drawPreview(); el._cover?.draw(); }));
+  // shape and framing apply together, so changing either one offers the same Apply button
   $(".f-cropx", el).addEventListener("input", () => { drawPreview(); el._cover?.draw(); });
   $(".b-style", el).onclick = async () => {
-    try { await api(`/api/clips/${c.id}/style`, { ...meta(), vertical_mode: curMode(), crop_x: $(".f-cropx", el).value });
+    try { await api(`/api/clips/${c.id}/style`, { ...meta(), vertical_mode: curMode(), crop_x: $(".f-cropx", el).value, aspect: curAspect() });
           el._kind = "vertical"; toast("Re-making the vertical clip…"); refresh(); }
     catch (e) { toast(e.message); }
   };
@@ -616,7 +630,7 @@ function setupCover(el, c) {
     const wide = shape() === "wide", W = wide ? 1280 : 1080, H = wide ? 720 : 1920;
     cv.width = W; cv.height = H; cv.classList.toggle("tall", !wide);
     g.filter = "contrast(1.08) saturate(1.25)";  // thumbnails read better a little punchier
-    const mode = el.querySelector(".framing .seg input:checked")?.value || "crop";
+    const mode = el.querySelector(".framing .seg-mode input:checked")?.value || "crop";
     paint(g, W, H, img, img.naturalWidth, img.naturalHeight, wide ? "crop" : mode, wide ? 0.5 : +$(".f-cropx", el).value);
     g.filter = "none";
     drawCoverText(g, W, H, $(".cv-text", el).value, $(".cv-pos", el).value, $(".cv-color", el).value);
@@ -648,7 +662,7 @@ function setupCover(el, c) {
 function setVideo(el, c) {
   const v = $("video", el);
   const ver = c.status === "rendering" ? "" : (c.path_vertical || "") + (c.path_original || "") + c.start + c.length +
-    (c.vertical_mode || "") + (c.crop_x ?? "");
+    (c.vertical_mode || "") + (c.crop_x ?? "") + (c.aspect || "");
   const key = el._kind + "|" + ver;
   if (v._key === key) return;
   v._key = key;
@@ -657,7 +671,7 @@ function setVideo(el, c) {
   v.src = `/media/clip/${c.id}/${el._kind}?v=${encodeURIComponent(ver)}`;
   const tg = $(".toggle", el);
   tg.innerHTML = ["vertical", "original"].filter(k => c["path_" + k]).map(k =>
-    `<button data-k="${k}" class="${k === el._kind ? "on" : ""}">${k === "vertical" ? "9:16" : "Original"}</button>`).join("");
+    `<button data-k="${k}" class="${k === el._kind ? "on" : ""}">${k === "vertical" ? aspectOf(c) : "Original"}</button>`).join("");
   tg.onclick = e => { const b = e.target.closest("button"); if (!b) return; el._kind = b.dataset.k; v._key = null; setVideo(el, c); };
 }
 
@@ -668,7 +682,7 @@ function updateCard(el, c) {
   $(".sub", el).textContent = (c.video_path || "").split("/").pop();
   $(".kind", el).textContent = c.source === "manual" ? "Your pick" : "Found automatically";
   $(".meter", el).innerHTML = meter(c.score);
-  $(".framing .now", el).textContent = "· " + (modeOf(c) === "crop" ? "zoomed in" : "full frame");
+  $(".framing .now", el).textContent = `· ${aspectOf(c)} · ` + (modeOf(c) === "crop" ? "zoomed in" : "full frame");
   $(".timing .now", el).textContent = `· ${Math.round(c.length)} s`;
   const saved = [c.cover_wide && "16:9", c.cover_tall && "9:16"].filter(Boolean);
   $(".cover .now", el).textContent = saved.length ? `· ${saved.join(" + ")} saved` : "· none yet";
@@ -794,7 +808,7 @@ const drop = $("#drop");
 drop.addEventListener("drop", e => { e.preventDefault(); uploadFiles(e.dataTransfer.files); });
 
 // ---------- settings ----------
-const SETTING_KEYS = ["clip_length", "minutes_per_clip", "max_clips_per_video", "min_score", "vertical_mode",
+const SETTING_KEYS = ["clip_length", "minutes_per_clip", "max_clips_per_video", "min_score", "aspect", "vertical_mode",
   "output_dir", "yt_privacy", "yt_category", "default_tags", "description_template"];
 function renderSettings() {
   const a = S.accounts;
@@ -810,6 +824,7 @@ function renderSettings() {
     settingsLoaded = true;
     for (const k of [...SETTING_KEYS, "ig_user_id", "ig_token", "ig_api_host"]) $("#s-" + k).value = S.settings[k] ?? "";
     $("#sel-mode").value = S.settings.vertical_mode;
+    $("#sel-aspect").value = S.settings.aspect || "9:16";
   }
 }
 $("#save-settings").onclick = async () => {
@@ -984,7 +999,7 @@ async function addSelection() {
   const dup = studioClips().find(c => Math.abs(c.start - ST.sel.start) < 1 && Math.abs(c.length - ST.sel.length) < 1);
   if (dup) return toast("That clip is already in your list.");
   try {
-    await api(`/api/videos/${ST.vid}/clips`, { start: ST.sel.start, length: ST.sel.length, vertical_mode: $("#sel-mode").value });
+    await api(`/api/videos/${ST.vid}/clips`, { start: ST.sel.start, length: ST.sel.length, vertical_mode: $("#sel-mode").value, aspect: $("#sel-aspect").value });
     const busy = S.activity.process !== "Idle";
     toast(`Added ${fmtT(ST.sel.start)} – ${fmtT(ST.sel.start + ST.sel.length)}. It goes to the front of the line and appears in Review ` +
           (busy ? "right after the current job finishes." : "in about a minute."));
@@ -999,7 +1014,7 @@ function renderStudioClips() {
   box.innerHTML = list.map(c => {
     const [cls, label] = STATUS[c.status] || ["", c.status];
     return `<button class="st-clip" data-goto="${c.id}">
-      ${c.thumb && c.status !== "rendering" ? `<img src="/media/clip/${c.id}/thumb?v=${encodeURIComponent(c.start + "" + c.length + (c.vertical_mode || "") + (c.crop_x ?? ""))}" alt="">` : `<div class="ph">Cutting…</div>`}
+      ${c.thumb && c.status !== "rendering" ? `<img src="/media/clip/${c.id}/thumb?v=${encodeURIComponent(c.start + "" + c.length + (c.vertical_mode || "") + (c.crop_x ?? "") + (c.aspect || ""))}" alt="">` : `<div class="ph">Cutting…</div>`}
       <span class="t">${fmtT(c.start)} – ${fmtT(c.start + c.length)}</span>
       <span class="row" style="gap:6px"><span class="badge ${cls}">${label}</span><span class="label">${c.source === "manual" ? "Your pick" : "Auto"}</span></span>
     </button>`; }).join("");
