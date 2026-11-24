@@ -39,6 +39,9 @@
   .brand { font: 700 20px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; padding: 0 8px; }
   .brand i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: 2px;
              box-shadow: 0 0 0 4px rgba(255, 77, 94, .18); }
+  .side-up { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px 12px; }
+  .side-up svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .side-up:disabled { opacity: 1; cursor: progress; }
   nav { display: grid; gap: 2px; }
   nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0;
                color: var(--side-muted); font: 500 14px/1 var(--f-body); padding: 10px; border-radius: 7px; cursor: pointer; }
@@ -185,9 +188,10 @@
   #toast.on { opacity: 1; transform: translateX(-50%); }
 
   @media (max-width: 900px) {
-    .app { grid-template-columns: 1fr; }
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     .side { position: sticky; top: 0; z-index: 10; height: auto; flex-direction: row; align-items: center; padding: 10px 12px; gap: 12px; overflow-x: auto; }
     .brand { flex: none; } .activity { display: none; }
+    .side-up { width: auto; flex: none; padding: 8px 10px; } .side-up .lbl { display: none; }
     nav { display: flex; gap: 2px; } nav button { width: auto; padding: 8px 10px; } nav button span.lbl { display: none; }
     nav button.on { box-shadow: inset 0 -3px 0 var(--accent); }
     .two, .form { grid-template-columns: 1fr; }
@@ -204,6 +208,8 @@
 <div class="app">
   <aside class="side">
     <div class="brand"><i></i>Clip Factory</div>
+    <button class="btn primary side-up" id="side-up" title="Upload videos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg><span class="lbl">Upload videos</span></button>
     <nav id="nav">
       <button data-view="review" class="on" title="Review">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>
@@ -232,7 +238,7 @@
       <div class="view-head"><div><h1>Review</h1>
         <p class="lede">Check each clip, adjust the framing or timing if needed, then approve it to post. Nothing goes out without your approval.</p></div></div>
       <div class="grid" id="grid-review"></div>
-      <div class="empty" id="empty-review">No clips waiting for review.<br>Upload a video or add a drive folder under <b>Videos &amp; drives</b>, or pick moments yourself in <b>Studio</b>.</div>
+      <div class="empty" id="empty-review">No clips waiting for review.<br>Click <b>Upload videos</b> or add a drive folder under <b>Videos &amp; drives</b>, or pick moments yourself in <b>Studio</b>.</div>
     </section>
 
     <section class="view" id="v-studio">
@@ -760,16 +766,18 @@ function uploadFiles(files) {
   const fd = new FormData(); files.forEach(f => fd.append("files", f));
   const total = files.reduce((n, f) => n + f.size, 0);
   const label = `${files.length} file${files.length > 1 ? "s" : ""} (${fmtGB(total)})`;
-  $("#up-status").hidden = false; uploading = true;
+  $("#up-status").hidden = false; uploading = true; $("#side-up").disabled = true;
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/api/upload");
   xhr.upload.onprogress = e => {
     const p = e.lengthComputable ? e.loaded / e.total : 0;
     $("#up-bar").style.width = Math.round(p * 100) + "%";
     $("#up-label").textContent = p < 1 ? `Uploading ${label}… ${Math.round(p * 100)}%` : `Saving ${label}…`;
+    $("#side-up .lbl").textContent = p < 1 ? `Uploading ${Math.round(p * 100)}%` : "Saving…";
   };
   xhr.onloadend = () => {
     uploading = false; $("#up-status").hidden = true; $("#up-files").value = "";
+    $("#side-up").disabled = false; $("#side-up .lbl").textContent = "Upload videos";
     let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
     if (xhr.status === 200) {
       toast(`Added ${r.added.length} video(s). Cutting clips now.` + (r.skipped.length ? ` Skipped ${r.skipped.length} non-video file(s).` : ""));
@@ -779,6 +787,7 @@ function uploadFiles(files) {
   xhr.send(fd);
 }
 $("#up-files").onchange = e => uploadFiles(e.target.files);
+$("#side-up").onclick = () => $("#up-files").click();
 const drop = $("#drop");
 ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(t => drop.addEventListener(t, () => drop.classList.remove("over")));
