@@ -308,6 +308,9 @@ def approve(cid):
         return _err("Connect Instagram in Settings first")
     if clip["status"] in ("rendering", "posting"):
         return _err("This clip is busy — try again in a moment")
+    targets = [t for t in targets if not clip[f"{t}_url"]]
+    if not targets:
+        return _err("It's already posted everywhere you ticked")
     _save_meta(cid, body)
     db.update("clips", cid, status="posting", post_error=None)
     worker.post_q.put(("post", cid, targets))

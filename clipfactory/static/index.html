@@ -673,7 +673,12 @@ function updateCard(el, c) {
   el.querySelectorAll(".targets input").forEach(i => { if (c[i.value + "_url"]) { i.checked = false; i.disabled = true; } });
   const busy = c.status === "rendering" || c.status === "posting";
   const closed = c.status === "rejected" || c.status === "posted";
-  $(".b-approve", el).disabled = busy; $(".b-approve", el).hidden = closed;
+  // a posted clip can still go to the places it hasn't been posted yet
+  const left = TARGETS.filter(([k]) => !c[k + "_url"]).length;
+  const more = c.status === "posted" && left > 0;
+  $(".b-approve", el).disabled = busy; $(".b-approve", el).hidden = c.status === "rejected" || (c.status === "posted" && !more);
+  $(".b-approve", el).textContent = more ? "Post to more places" : "Approve & post";
+  $(".targets", el).closest(".fieldset").hidden = c.status === "rejected" || (c.status === "posted" && !more);
   $(".b-reject", el).hidden = !["pending", "post_failed", "error"].includes(c.status);
   $(".b-restore", el).hidden = c.status !== "rejected";
   $(".b-recut", el).disabled = busy; $(".b-style", el).disabled = busy;
