@@ -178,7 +178,7 @@ def add_clip(vid):
     if mode not in (None, "blur", "crop"):
         return _err("Unknown vertical style")
     aspect = body.get("aspect")
-    if aspect not in (None, *media.ASPECTS):
+    if aspect not in (None, "original", *media.ASPECTS):
         return _err("Unknown shape")
     score = worker.load_score(vid) or []
     peak = max(score[int(start):int(start + length)] or [0])
@@ -289,7 +289,7 @@ def restyle(cid):
     if mode not in ("blur", "crop"):
         return _err("Unknown vertical style")
     aspect = body.get("aspect", clip["aspect"])
-    if aspect not in (None, *media.ASPECTS):
+    if aspect not in (None, "original", *media.ASPECTS):
         return _err("Unknown shape")
     try:
         crop_x = min(max(float(body.get("crop_x", 0.5)), 0.0), 1.0)

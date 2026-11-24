@@ -30,7 +30,7 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
 3. **Review** → play each clip (toggle 9:16 / Original), edit the title, description and tags,
    tick where it should go, then **Approve & post** or **Reject**.
    - *Shape*: **9:16** (Reels, Shorts, TikTok), **4:5** (Instagram feed post) or **1:1**
-     (square). Set the default in Settings; change it per clip under Framing, or in Studio.
+     (square), or **Original** (the video's own shape, nothing cropped). Set the default in Settings; change it per clip under Framing, or in Studio.
    - *Framing*: switch between **Zoomed in** (fills the vertical screen, sides cut off — the
      slider picks which part stays) and **Full frame** (whole picture, blurred bars). A live
      preview shows the change before you apply it; only the vertical version is re-made.

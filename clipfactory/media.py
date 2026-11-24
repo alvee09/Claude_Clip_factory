@@ -180,14 +180,16 @@ ASPECTS = {"9:16": (1080, 1920),   # Reels, Shorts, TikTok
 
 def render(src, start, length, out, kind, settings, vertical_mode=None, crop_x=0.5,
            aspect=None, on_progress=lambda p: None):
-    """kind: 'vertical' (the social version, shaped by aspect: 9:16, 4:5 or 1:1) or 'original'.
+    """kind: 'vertical' (the social version, shaped by aspect: 9:16, 4:5, 1:1 or 'original') or 'original'.
 
     vertical_mode: 'blur' (whole frame on a blurred background) or 'crop' (zoom to
     fill the screen; crop_x picks which part stays: 0 = left, 0.5 = center, 1 = right).
     """
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if kind == "vertical":
+    if kind == "vertical" and (aspect or settings.get("aspect")) == "original":
+        vf = "scale='min(1920,iw)':-2,setsar=1"  # the social version keeps the video's own shape
+    elif kind == "vertical":
         w, h = ASPECTS.get(aspect or settings.get("aspect"), ASPECTS["9:16"])
         if (vertical_mode or settings["vertical_mode"]) == "crop":
             x = min(max(float(crop_x if crop_x is not None else 0.5), 0.0), 1.0)

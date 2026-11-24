@@ -29,6 +29,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 14.5px/1.5 var(--f-body); }
   .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100%; }
@@ -125,7 +126,8 @@
   .fr-grid canvas { width: 112px; height: auto; aspect-ratio: 9 / 16; background: #000; border-radius: 6px; display: block; }
   .fr-controls { display: grid; gap: 9px; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg.seg3 { grid-template-columns: repeat(3, 1fr); }
+  .seg.seg4 { grid-template-columns: repeat(4, 1fr); }
+  .seg.seg4 label { font-size: 12px; padding: 7px 2px; }
   .seg label { position: relative; text-align: center; font-size: 12.5px; padding: 7px 4px; cursor: pointer; background: var(--surface); }
   .seg label + label { border-left: 1px solid var(--line); }
   .seg input { position: absolute; opacity: 0; pointer-events: none; }
@@ -262,7 +264,7 @@
               <span class="tc"><span class="label">Selected</span><b id="sel-tc">0:00 – 0:30</b></span>
               <select id="sel-len" aria-label="Clip length"><option value="15">15 s</option><option value="20">20 s</option>
                 <option value="30" selected>30 s</option><option value="45">45 s</option><option value="60">60 s</option></select>
-              <select id="sel-aspect" aria-label="Shape"><option value="9:16">9:16 Reel</option><option value="4:5">4:5 Post</option><option value="1:1">1:1 Square</option></select>
+              <select id="sel-aspect" aria-label="Shape"><option value="9:16">9:16 Reel</option><option value="4:5">4:5 Post</option><option value="1:1">1:1 Square</option><option value="original">Original</option></select>
               <select id="sel-mode" aria-label="Vertical framing"><option value="crop">Zoomed in</option><option value="blur">Full frame</option></select>
               <button class="btn small" id="nudge-back" aria-label="Move 5 seconds earlier">−5 s</button>
               <button class="btn small" id="nudge-fwd" aria-label="Move 5 seconds later">+5 s</button>
@@ -350,7 +352,7 @@
           <label for="s-max_clips_per_video">Max clips per video</label><input id="s-max_clips_per_video" type="number" min="1">
           <label for="s-min_score">Pickiness (1 = loose, 2.5 = strict)</label><input id="s-min_score" type="number" step="0.1">
           <label for="s-aspect">Shape of social clips</label>
-          <select id="s-aspect"><option value="9:16">9:16 · Reels, Shorts, TikTok</option><option value="4:5">4:5 · Instagram feed post</option><option value="1:1">1:1 · Square</option></select>
+          <select id="s-aspect"><option value="9:16">9:16 · Reels, Shorts, TikTok</option><option value="4:5">4:5 · Instagram feed post</option><option value="1:1">1:1 · Square</option><option value="original">Original · the video's own shape</option></select>
           <label for="s-vertical_mode">Vertical framing</label>
           <select id="s-vertical_mode"><option value="crop">Zoomed in, centered on gameplay</option><option value="blur">Full frame on blurred background</option></select>
           <label for="s-output_dir">Output folder</label><input id="s-output_dir">
@@ -441,8 +443,9 @@ function bucket(c) {
 }
 const modeOf = c => c.vertical_mode || S.settings.vertical_mode;
 const aspectOf = c => c.aspect || S.settings.aspect || "9:16";
-const ASPECTS = [["9:16", "9:16 Reel"], ["4:5", "4:5 Post"], ["1:1", "1:1 Square"]];
-const ASPECT_HINT = { "9:16": "Reels, Shorts, TikTok", "4:5": "Instagram feed post", "1:1": "Square, works everywhere" };
+const ASPECTS = [["9:16", "9:16 Reel"], ["4:5", "4:5 Post"], ["1:1", "1:1 Square"], ["original", "Original"]];
+const ASPECT_HINT = { "9:16": "Reels, Shorts, TikTok", "4:5": "Instagram feed post", "1:1": "Square, works everywhere",
+                      original: "The video's own shape, nothing cropped" };
 
 function makeCard(c) {
   const el = document.createElement("article");
@@ -461,7 +464,7 @@ function makeCard(c) {
         <div class="fr-grid">
           <canvas class="fr-preview" width="270" height="480" aria-label="Framing preview"></canvas>
           <div class="fr-controls">
-            <div class="seg seg3 seg-aspect" role="radiogroup" aria-label="Shape">${ASPECTS.map(([v, l]) =>
+            <div class="seg seg4 seg-aspect" role="radiogroup" aria-label="Shape">${ASPECTS.map(([v, l]) =>
               `<label title="${ASPECT_HINT[v]}"><input type="radio" name="fa-${c.id}" value="${v}">${l}</label>`).join("")}</div>
             <div class="seg seg-mode" role="radiogroup" aria-label="Framing">
               <label><input type="radio" name="fm-${c.id}" value="crop">Zoomed in</label>
@@ -534,11 +537,13 @@ function makeCard(c) {
   const curMode = () => el.querySelector(".framing .seg-mode input:checked")?.value || "crop";
   const curAspect = () => el.querySelector(".framing .seg-aspect input:checked")?.value || "9:16";
   const drawPreview = () => {
-    $(".range", el).hidden = curMode() !== "crop";
-    const [aw, ah] = curAspect().split(":").map(Number);
+    const orig = curAspect() === "original", img = el._img?.complete && el._img.naturalWidth ? el._img : null;
+    $(".range", el).hidden = orig || curMode() !== "crop";
+    $(".framing .seg-mode", el).hidden = orig;
+    const [aw, ah] = orig ? (img ? [img.naturalWidth, img.naturalHeight] : [16, 9]) : curAspect().split(":").map(Number);
     pv.width = 270; pv.height = Math.round(270 * ah / aw); pv.style.aspectRatio = `${aw} / ${ah}`;
-    if (el._img?.complete && el._img.naturalWidth)
-      paint(pg, pv.width, pv.height, el._img, el._img.naturalWidth, el._img.naturalHeight, curMode(), +$(".f-cropx", el).value);
+    if (img && orig) pg.drawImage(img, 0, 0, pv.width, pv.height);
+    else if (img) paint(pg, pv.width, pv.height, img, img.naturalWidth, img.naturalHeight, curMode(), +$(".f-cropx", el).value);
   };
   $(".framing", el).addEventListener("toggle", () => {
     if (!$(".framing", el).open || el._img) return drawPreview();
@@ -671,7 +676,7 @@ function setVideo(el, c) {
   v.src = `/media/clip/${c.id}/${el._kind}?v=${encodeURIComponent(ver)}`;
   const tg = $(".toggle", el);
   tg.innerHTML = ["vertical", "original"].filter(k => c["path_" + k]).map(k =>
-    `<button data-k="${k}" class="${k === el._kind ? "on" : ""}">${k === "vertical" ? aspectOf(c) : "Original"}</button>`).join("");
+    `<button data-k="${k}" class="${k === el._kind ? "on" : ""}">${k === "vertical" ? (aspectOf(c) === "original" ? "Social" : aspectOf(c)) : "Original"}</button>`).join("");
   tg.onclick = e => { const b = e.target.closest("button"); if (!b) return; el._kind = b.dataset.k; v._key = null; setVideo(el, c); };
 }
 
@@ -682,7 +687,8 @@ function updateCard(el, c) {
   $(".sub", el).textContent = (c.video_path || "").split("/").pop();
   $(".kind", el).textContent = c.source === "manual" ? "Your pick" : "Found automatically";
   $(".meter", el).innerHTML = meter(c.score);
-  $(".framing .now", el).textContent = `· ${aspectOf(c)} · ` + (modeOf(c) === "crop" ? "zoomed in" : "full frame");
+  $(".framing .now", el).textContent = aspectOf(c) === "original" ? "· original shape"
+    : `· ${aspectOf(c)} · ` + (modeOf(c) === "crop" ? "zoomed in" : "full frame");
   $(".timing .now", el).textContent = `· ${Math.round(c.length)} s`;
   const saved = [c.cover_wide && "16:9", c.cover_tall && "9:16"].filter(Boolean);
   $(".cover .now", el).textContent = saved.length ? `· ${saved.join(" + ")} saved` : "· none yet";
