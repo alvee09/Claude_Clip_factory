@@ -301,7 +301,7 @@
           <h2>Upload videos</h2>
           <label class="drop" id="drop">
             <input type="file" id="up-files" accept="video/*,.mkv,.mts,.m2ts,.ts,.flv,.wmv" multiple hidden>
-            <b>Drop videos here</b><span class="hint">or click to choose · copied into Clip Factory</span>
+            <b>Drop videos here</b><span class="hint">or click to choose · copied onto this Mac · <span id="disk-free"></span></span>
           </label>
           <div id="up-status" hidden><div class="hint" id="up-label"></div><div class="bar"><i id="up-bar" style="width:0"></i></div></div>
         </div>
@@ -309,7 +309,7 @@
           <h2>Add a folder from your drive</h2>
           <div class="row"><input id="src-path" placeholder="/Volumes/MyDrive/Videos"><button class="btn primary" id="add-src">Add &amp; scan</button></div>
           <div class="volumes" id="volumes"></div>
-          <p class="hint">Tip: drag a folder from Finder into the box. Subfolders are included.</p>
+          <p class="hint">Best for big videos: they're read straight off the drive, nothing is copied. Tip: drag a folder from Finder into the box. Subfolders are included.</p>
         </div>
       </div>
       <div class="panel"><h2>Folders</h2><div class="table-wrap"><table id="sources"></table></div></div>
@@ -673,6 +673,11 @@ function setVideo(el, c) {
   v._key = key;
   if (c.status === "rendering") { v.removeAttribute("src"); v.load(); v.poster = ""; return; }
   v.poster = `/media/clip/${c.id}/thumb?v=${encodeURIComponent(ver)}`;
+  if (!c.path_vertical && !c.path_original) {  // video files deleted after posting/rejecting to save space
+    v.removeAttribute("src"); v.controls = false; v.load(); $(".toggle", el).innerHTML = ""; return;
+  }
+  v.controls = true;
+  if (!c["path_" + el._kind]) el._kind = c.path_vertical ? "vertical" : "original";
   v.src = `/media/clip/${c.id}/${el._kind}?v=${encodeURIComponent(ver)}`;
   const tg = $(".toggle", el);
   tg.innerHTML = ["vertical", "original"].filter(k => c["path_" + k]).map(k =>
@@ -732,6 +737,7 @@ function renderClips() {
 
 // ---------- library ----------
 function renderLibrary() {
+  $("#disk-free").textContent = `${fmtGB(S.disk_free)} free on this Mac`;
   $("#volumes").innerHTML = S.volumes.length
     ? "<span class='hint'>Connected drives:</span>" + S.volumes.map(v =>
         `<button class="btn small" data-vol="${esc(v)}">${esc(v.split("/").pop())}</button>`).join("")
@@ -751,14 +757,24 @@ function renderLibrary() {
           ${v.error ? `<div class="err">${esc(v.error)}</div>` : ""}</td>
       <td class="num">${v.clips}</td>
       <td style="text-align:right;white-space:nowrap">${v.status === "done" ? `<button class="btn small" data-studio="${v.id}">Open in Studio</button> ` : ""}
-        ${["done", "error"].includes(v.status) ? `<button class="btn small" data-retry="${v.id}">Re-process</button>` : ""}</td>
+        ${["done", "error"].includes(v.status) ? `<button class="btn small" data-retry="${v.id}">Re-process</button>
+        <button class="btn small danger" data-remove="${v.id}">Remove</button>` : ""}</td>
     </tr>`; }).join("") : `<tr><td class="hint">No videos yet.</td></tr>`;
 }
 
 document.addEventListener("click", async e => {
-  const t = e.target.closest("[data-vol],[data-rescan],[data-forget],[data-retry],[data-studio]"); if (!t) return;
+  const t = e.target.closest("[data-vol],[data-rescan],[data-forget],[data-retry],[data-studio],[data-remove]"); if (!t) return;
   try {
     if (t.dataset.vol) { $("#src-path").value = t.dataset.vol; $("#src-path").focus(); }
+    if (t.dataset.remove) {
+      const v = S.videos.find(x => x.id === +t.dataset.remove), uploaded = S.sources.some(s => s.path.endsWith("/uploads") && v.source_id === s.id);
+      const n = S.clips.filter(c => c.video_id === v.id).length;
+      if (confirm(`Remove “${v.path.split("/").pop()}” and its ${n} clip(s) from Clip Factory?\n\n` + (uploaded
+          ? `The uploaded copy (${fmtGB(v.size || 0)}) is deleted from this Mac.`
+          : "The video on your drive is NOT deleted.") + " Posted clips stay on YouTube and Instagram.")) {
+        await api(`/api/videos/${v.id}`, undefined, "DELETE"); toast("Removed"); refresh();
+      }
+    }
     if (t.dataset.rescan) { await api(`/api/sources/${t.dataset.rescan}/scan`); toast("Scanning…"); }
     if (t.dataset.forget && confirm("Stop tracking this folder? (Nothing on the drive is deleted.)"))
       await api(`/api/sources/${t.dataset.forget}`, undefined, "DELETE");
@@ -781,30 +797,46 @@ $("#src-path").addEventListener("drop", e => {
 
 // ---------- upload ----------
 let uploading = false;
-function uploadFiles(files) {
+// Each file streams straight into Clip Factory's uploads folder. Huge files are better added
+// as a drive folder (read in place); the server refuses uploads that won't fit on this Mac.
+const VIDEO_EXT = /\.(mp4|mov|m4v|mkv|avi|webm|mts|m2ts|ts|flv|wmv|mpg|mpeg|3gp)$/i;
+function putFile(f, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", "/api/upload?name=" + encodeURIComponent(f.name));
+    xhr.upload.onprogress = e => onProgress(e.lengthComputable ? e.loaded / e.total : 0);
+    xhr.onloadend = () => {
+      let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
+      xhr.status === 200 ? resolve(r) : reject(new Error(r.error || "Upload failed"));
+    };
+    xhr.send(f);
+  });
+}
+async function uploadFiles(files) {
   files = [...files]; if (!files.length || uploading) return;
-  const fd = new FormData(); files.forEach(f => fd.append("files", f));
-  const total = files.reduce((n, f) => n + f.size, 0);
-  const label = `${files.length} file${files.length > 1 ? "s" : ""} (${fmtGB(total)})`;
+  const vids = files.filter(f => VIDEO_EXT.test(f.name)), skipped = files.length - vids.length;
+  if (!vids.length) return toast("Those don't look like video files");
+  try { await api("/api/upload/check", { sizes: vids.map(f => f.size) }); }
+  catch (e) { $("#up-files").value = ""; show("library"); return alert(e.message); }
+  const total = vids.reduce((n, f) => n + f.size, 0);
   $("#up-status").hidden = false; uploading = true; $("#side-up").disabled = true;
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/upload");
-  xhr.upload.onprogress = e => {
-    const p = e.lengthComputable ? e.loaded / e.total : 0;
-    $("#up-bar").style.width = Math.round(p * 100) + "%";
-    $("#up-label").textContent = p < 1 ? `Uploading ${label}… ${Math.round(p * 100)}%` : `Saving ${label}…`;
-    $("#side-up .lbl").textContent = p < 1 ? `Uploading ${Math.round(p * 100)}%` : "Saving…";
-  };
-  xhr.onloadend = () => {
+  let done = 0, added = 0;
+  try {
+    for (const [i, f] of vids.entries()) {
+      await putFile(f, p => {
+        const all = (done + f.size * p) / total;
+        $("#up-bar").style.width = Math.round(all * 100) + "%";
+        $("#up-label").textContent = `Uploading ${vids.length > 1 ? `${i + 1} of ${vids.length}: ` : ""}${f.name} (${fmtGB(f.size)})… ${Math.round(p * 100)}%`;
+        $("#side-up .lbl").textContent = `Uploading ${Math.round(all * 100)}%`;
+      });
+      done += f.size; added++; refresh();
+    }
+    toast(`Added ${added} video(s). Cutting clips now.` + (skipped ? ` Skipped ${skipped} non-video file(s).` : ""));
+  } catch (e) { toast((added ? `Added ${added}, then: ` : "") + e.message); }
+  finally {
     uploading = false; $("#up-status").hidden = true; $("#up-files").value = "";
     $("#side-up").disabled = false; $("#side-up .lbl").textContent = "Upload videos";
-    let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
-    if (xhr.status === 200) {
-      toast(`Added ${r.added.length} video(s). Cutting clips now.` + (r.skipped.length ? ` Skipped ${r.skipped.length} non-video file(s).` : ""));
-      refresh();
-    } else toast(r.error || "Upload failed");
-  };
-  xhr.send(fd);
+  }
 }
 $("#up-files").onchange = e => uploadFiles(e.target.files);
 $("#side-up").onclick = () => $("#up-files").click();

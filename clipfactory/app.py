@@ -1,6 +1,7 @@
 """Local web dashboard + JSON API (http://127.0.0.1:5055)."""
 import io
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def state():
         "accounts": _accounts,
         "youtube_client_ready": youtube.CLIENT_SECRET.exists(),
         "volumes": volumes,
+        "disk_free": shutil.disk_usage(config.ROOT).free,
         "activity": worker.activity,
         "queue": {"process": worker.process_q.qsize(), "post": worker.post_q.qsize()},
     })
@@ -69,36 +71,63 @@ def add_source():
     return jsonify({"id": sid})
 
 
-@app.post("/api/upload")
-def upload_videos():
-    files = request.files.getlist("files")
-    if not files:
-        return _err("Choose at least one video file")
+SPACE_MARGIN = 5_000_000_000  # leave room for clips and macOS itself
+
+
+def _space_problem(size):
+    free = shutil.disk_usage(config.ROOT).free
+    if size + SPACE_MARGIN > free:
+        return (f"Not enough space on this Mac: {free / 1e9:.0f} GB free, this needs {size / 1e9:.0f} GB "
+                "plus room for clips. Use “Add a folder from your drive” instead. It reads videos "
+                "straight off the drive without copying them.")
+    return None
+
+
+@app.post("/api/upload/check")
+def upload_check():
+    """Before an upload starts: is there room for these files?"""
+    sizes = [int(x) for x in (request.json or {}).get("sizes", [])]
+    problem = _space_problem(sum(sizes))
+    return (_err(problem, 507) if problem else jsonify({"ok": True}))
+
+
+@app.put("/api/upload")
+def upload_video():
+    """One file, streamed straight to disk (no temporary copy, so huge files work)."""
+    filename = request.args.get("name", "")
+    ext = Path(filename).suffix.lower()
+    if ext not in config.VIDEO_EXTS:
+        return _err("That doesn't look like a video file")
+    size = request.content_length or 0
+    problem = _space_problem(size)
+    if problem:
+        return _err(problem, 507)
     config.UPLOADS.mkdir(exist_ok=True)
     folder = str(config.UPLOADS.resolve())
     existing = db.one("SELECT id FROM sources WHERE path = ?", (folder,))
     sid = existing["id"] if existing else db.x(
         "INSERT INTO sources (path, added) VALUES (?, ?)", (folder, db.now()))
-    added, skipped = [], []
-    for f in files:
-        ext = Path(f.filename or "").suffix.lower()
-        if ext not in config.VIDEO_EXTS:
-            skipped.append(f.filename)
-            continue
-        name = (secure_filename(Path(f.filename).stem) or "video") + ext
-        dest = config.UPLOADS / name
-        n = 1
-        while dest.exists():  # never overwrite an earlier upload
-            dest = config.UPLOADS / f"{Path(name).stem}_{n}{Path(name).suffix}"
-            n += 1
-        f.save(dest)
-        vid = db.x("INSERT INTO videos (source_id, path, size, added) VALUES (?, ?, ?, ?)",
-                   (sid, str(dest.resolve()), dest.stat().st_size, db.now()))
-        worker.process_q.put(("video", vid))
-        added.append(dest.name)
-    if not added:
-        return _err("Those don't look like video files")
-    return jsonify({"added": added, "skipped": skipped})
+    name = (secure_filename(Path(filename).stem) or "video") + ext
+    dest = config.UPLOADS / name
+    n = 1
+    while dest.exists():  # never overwrite an earlier upload
+        dest = config.UPLOADS / f"{Path(name).stem}_{n}{Path(name).suffix}"
+        n += 1
+    part = dest.with_name(dest.name + ".part")
+    try:
+        with open(part, "wb") as out:
+            while chunk := request.stream.read(8 * 1024 * 1024):
+                out.write(chunk)
+        if size and part.stat().st_size != size:
+            raise RuntimeError("The upload was cut off before it finished")
+        part.replace(dest)
+    except Exception as e:
+        part.unlink(missing_ok=True)
+        return _err(f"Upload failed: {e}", 500)
+    vid = db.x("INSERT INTO videos (source_id, path, size, added) VALUES (?, ?, ?, ?)",
+               (sid, str(dest.resolve()), dest.stat().st_size, db.now()))
+    worker.process_q.put(("video", vid))
+    return jsonify({"added": dest.name})
 
 
 @app.post("/api/sources/<int:sid>/scan")
@@ -185,6 +214,25 @@ def add_clip(vid):
     cid = worker.new_clip(video, round(start, 2), length, peak, "manual", config.load(), mode, crop_x, aspect)
     worker.process_q.put(("recut", cid))
     return jsonify({"id": cid})
+
+
+@app.delete("/api/videos/<int:vid>")
+def remove_video(vid):
+    """Forget a video and delete its clips. An uploaded copy is deleted too;
+    a video on your drive is never touched."""
+    video = _video_or_404(vid)
+    if video["status"] in ("analyzing", "rendering") or db.one(
+            "SELECT id FROM clips WHERE video_id = ? AND status IN ('rendering', 'posting')", (vid,)):
+        return _err("This video is busy — try again when it's done")
+    for clip in db.q("SELECT * FROM clips WHERE video_id = ?", (vid,)):
+        worker.delete_clip_files(clip, keep_thumb=False, keep_covers=False)
+    db.x("DELETE FROM clips WHERE video_id = ?", (vid,))
+    db.x("DELETE FROM videos WHERE id = ?", (vid,))
+    (worker.SCORES / f"{vid}.json").unlink(missing_ok=True)
+    path = Path(video["path"]).resolve()
+    if config.UPLOADS.resolve() in path.parents:
+        path.unlink(missing_ok=True)
+    return jsonify({"ok": True})
 
 
 @app.post("/api/videos/<int:vid>/retry")
@@ -325,15 +373,22 @@ def approve(cid):
 
 @app.post("/api/clips/<int:cid>/reject")
 def reject(cid):
-    _clip_or_404(cid)
+    clip = _clip_or_404(cid)
+    if clip["status"] in ("rendering", "posting"):
+        return _err("This clip is busy — try again in a moment")
+    worker.delete_clip_files(clip)  # rejected clips don't keep their video files
     db.update("clips", cid, status="rejected")
     return jsonify({"ok": True})
 
 
 @app.post("/api/clips/<int:cid>/restore")
 def restore(cid):
-    _clip_or_404(cid)
-    db.update("clips", cid, status="pending")
+    clip = _clip_or_404(cid)
+    if clip["path_vertical"] or clip["path_original"]:
+        db.update("clips", cid, status="pending")
+    else:  # its files were deleted when it was rejected, so cut it again
+        db.update("clips", cid, status="rendering", post_error=None)
+        worker.process_q.put(("recut", cid))
     return jsonify({"ok": True})
 
 

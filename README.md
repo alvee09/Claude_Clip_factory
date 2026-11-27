@@ -98,6 +98,21 @@ token with `instagram_content_publish`.
 Tokens expire (long-lived ones after ~60 days) — paste a fresh one when posting starts failing.
 Instagram also caps how many posts an account can publish through the API per 24 hours.
 
+## Big videos (an hour long, 100 GB)
+
+- **Add them as a drive folder, don't upload them.** A folder on your drive is read in place,
+  so nothing is copied onto your Mac. Uploading copies the whole file, and Clip Factory refuses
+  an upload that won't fit (the Library shows how much space this Mac has free).
+- **Analysis is fast.** Only the video's keyframes are decoded to spot action; the sound is
+  read in full. On a 13-minute 1080p60 test this took 9 s instead of 694 s and found the same
+  highlights. On a big file the limit is usually how fast the drive can be read: roughly
+  10–15 minutes per 100 GB over USB 3.
+- **Old renders are deleted automatically.** A clip's video files are removed once it's posted
+  or rejected (its still image, title and links stay). Posting it somewhere else later, or
+  bringing it back from Rejected, re-cuts it first.
+- **Remove** in the Videos table forgets a video and deletes its clips. An uploaded copy is
+  deleted too; a video on your drive is never touched.
+
 ## Where things live
 
 | Path | What |

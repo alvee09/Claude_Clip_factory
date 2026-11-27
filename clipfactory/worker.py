@@ -110,6 +110,20 @@ def new_clip(video, start, length, score, source, s, vertical_mode=None, crop_x=
          db.now(), source, vertical_mode, crop_x, aspect))
 
 
+def delete_clip_files(clip, keep_thumb=True, keep_covers=True):
+    """Free disk space: delete a clip's rendered videos (and optionally its images)."""
+    cols = ["path_vertical", "path_original"] + ([] if keep_thumb else ["thumb"]) + \
+        ([] if keep_covers else ["cover_wide", "cover_tall"])
+    for col in cols:
+        if clip.get(col):
+            Path(clip[col]).unlink(missing_ok=True)
+    if db.one("SELECT id FROM clips WHERE id = ?", (clip["id"],)):
+        db.update("clips", clip["id"], **{c: None for c in cols})
+    folder = next((Path(clip[c]).parent for c in ("path_vertical", "path_original", "thumb") if clip.get(c)), None)
+    if folder and folder.is_dir() and not any(folder.iterdir()):
+        folder.rmdir()
+
+
 # ---------- intensity graph ----------
 
 SCORES = config.DATA / "scores"
@@ -161,8 +175,10 @@ def process_video(vid):
         db.update("videos", vid, status="rendering", progress=0.8)
         # Re-processing replaces automatic clips you haven't acted on yet; your own picks,
         # posted and rejected clips stay.
-        db.x("DELETE FROM clips WHERE video_id = ? AND status IN ('rendering', 'error', 'pending') "
-             "AND COALESCE(source, 'auto') = 'auto'", (vid,))
+        stale = "video_id = ? AND status IN ('rendering', 'error', 'pending') AND COALESCE(source, 'auto') = 'auto'"
+        for old in db.q(f"SELECT * FROM clips WHERE {stale}", (vid,)):
+            delete_clip_files(old, keep_thumb=False, keep_covers=False)
+        db.x(f"DELETE FROM clips WHERE {stale}", (vid,))
         for n, (start, length, sc) in enumerate(moments, 1):
             cid = new_clip(video, start, length, sc, "auto", s)
             _render_clip(db.one("SELECT * FROM clips WHERE id = ?", (cid,)), video, s)
@@ -192,6 +208,19 @@ def _tags(clip):
 def post_clip(clip_id, targets):
     clip = db.one("SELECT * FROM clips WHERE id = ?", (clip_id,))
     s = config.load()
+    if not (clip["path_vertical"] or clip["path_original"]):
+        # files were deleted after an earlier post; cut it again first
+        video = db.one("SELECT * FROM videos WHERE id = ?", (clip["video_id"],))
+        try:
+            if not video or not Path(video["path"]).exists():
+                raise RuntimeError("The source video is gone (is the drive plugged in?)")
+            activity["post"] = f"Re-cutting clip #{clip_id} before posting"
+            _render_clip(clip, video, s)
+        except Exception as e:
+            traceback.print_exc()
+            db.update("clips", clip_id, status="post_failed", post_error=f"Couldn't re-cut the clip: {e}"[:1000])
+            return
+        clip = db.one("SELECT * FROM clips WHERE id = ?", (clip_id,))
     tags = _tags(clip)
     errors, notes = [], []
     for target in targets:
@@ -230,6 +259,7 @@ def post_clip(clip_id, targets):
         db.update("clips", clip_id, status="post_failed", post_error="\n".join(errors + notes)[:1000])
     else:
         db.update("clips", clip_id, status="posted", post_error="\n".join(notes)[:1000] or None, posted_at=db.now())
+        delete_clip_files(clip)  # it's on YouTube/Instagram now; free the space
 
 
 # ---------- threads ----------
