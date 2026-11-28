@@ -27,6 +27,11 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
    they're copied into `uploads/`), or click your drive under *Connected drives* (or drag a folder from
    Finder into the box) → **Add & scan**. Subfolders are included. The drive is only read.
 2. Each video is analysed and cut. Progress shows in the table and the sidebar.
+   **A video is only ever processed once.** Re-scanning a folder adds new files only; anything
+   already in the library is skipped, even if it was renamed, moved, or the drive mounts under
+   a different name (files are recognised by a fingerprint of their size and first/last MB).
+   The same goes for uploading a file you already have. To do one again, press
+   **Re-process** (or **Process again** on a removed one) in the Videos table.
 3. **Review** → play each clip (toggle 9:16 / Original), edit the title, description and tags,
    tick where it should go, then **Approve & post** or **Reject**.
    - *Shape*: **9:16** (Reels, Shorts, TikTok), **4:5** (Instagram feed post) or **1:1**
@@ -41,7 +46,7 @@ Requires `ffmpeg` (`brew install ffmpeg`) and Python 3.10+.
      card says why), and the chosen frame becomes the Instagram Reel cover.
    - *Timing*: nudge the start/length and re-cut.
 4. **Studio** → pick a video and drag across its **intensity graph** — the video follows, so you
-   can find moments by eye. Choose a length (15–60 s) and framing, then **Add as clip**. Your
+   can find moments by eye. The clip starts where you let go, so play shows it from the beginning. Choose a length (15–60 s) and framing, then **Add as clip**. Your
    picks jump ahead of background work and land in Review like the automatic ones (marked
    "Your pick"). Re-processing a video never deletes your picks.
 5. **Posted** lists everything that went out, with links.
@@ -110,8 +115,8 @@ Instagram also caps how many posts an account can publish through the API per 24
 - **Old renders are deleted automatically.** A clip's video files are removed once it's posted
   or rejected (its still image, title and links stay). Posting it somewhere else later, or
   bringing it back from Rejected, re-cuts it first.
-- **Remove** in the Videos table forgets a video and deletes its clips. An uploaded copy is
-  deleted too; a video on your drive is never touched.
+- **Remove** in the Videos table deletes a video's clips. An uploaded copy is deleted too.
+  A video on your drive is never touched; it stays listed as *Skipped* so scans leave it alone.
 
 ## Where things live
 

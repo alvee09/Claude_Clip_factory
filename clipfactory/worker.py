@@ -3,6 +3,7 @@
 Video processing and posting run on separate threads so an upload never waits
 behind hours of footage being analysed.
 """
+import hashlib
 import itertools
 import json
 import os
@@ -37,13 +38,47 @@ activity = {"process": "Idle", "post": "Idle"}
 
 # ---------- scanning ----------
 
+FP_CHUNK = 1024 * 1024
+
+
+def fingerprint(path, size=None):
+    """Identifies a file wherever it lives: its size plus a hash of its first and last MB.
+    Reads 2 MB, so it's instant even on a 100 GB file. The dashboard computes the same thing
+    in the browser before an upload (keep the two in step)."""
+    size = Path(path).stat().st_size if size is None else size
+    h = hashlib.sha1()
+    with open(path, "rb") as f:
+        h.update(f.read(FP_CHUNK))
+        f.seek(max(0, size - FP_CHUNK))
+        h.update(f.read(FP_CHUNK))
+    return f"{size}:{h.hexdigest()}"
+
+
+def known_video(fp):
+    """The video already in the library with this fingerprint, if any."""
+    return db.one("SELECT * FROM videos WHERE fingerprint = ?", (fp,))
+
+
+def _backfill_fingerprints():
+    for v in db.q("SELECT id, path FROM videos WHERE fingerprint IS NULL"):
+        try:
+            db.update("videos", v["id"], fingerprint=fingerprint(v["path"]))
+        except OSError:
+            pass  # drive unplugged; try again next scan
+
+
 def scan_source(source_id):
+    """Adds new videos only. Anything seen before (by path or by fingerprint, so a renamed
+    file, a moved one or a drive that mounts under a new name all count) is left alone.
+    Re-processing is only ever done by hand from the Videos table."""
     src = db.one("SELECT * FROM sources WHERE id = ?", (source_id,))
     root = Path(src["path"])
     if not root.is_dir():
+        db.update("sources", source_id, last_scan="Folder not found (is the drive plugged in?)")
         raise RuntimeError(f"Folder not found: {root} (is the drive plugged in?)")
+    _backfill_fingerprints()
     out_dir = Path(config.load()["output_dir"]).resolve()
-    found = 0
+    found = known = 0
     for dirpath, dirnames, filenames in os.walk(root, onerror=lambda e: None):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")
                        and Path(dirpath, d).resolve() != out_dir]
@@ -59,11 +94,24 @@ def scan_source(source_id):
             if size < 1_000_000:
                 continue
             if db.one("SELECT id FROM videos WHERE path = ?", (str(path),)):
+                known += 1
                 continue
-            vid = db.x("INSERT INTO videos (source_id, path, size, added) VALUES (?, ?, ?, ?)",
-                       (source_id, str(path), size, db.now()))
+            try:
+                fp = fingerprint(path, size)
+            except OSError:
+                continue
+            same = known_video(fp)
+            if same:
+                known += 1
+                if not Path(same["path"]).exists():  # moved, renamed or remounted: follow it
+                    db.update("videos", same["id"], path=str(path), source_id=source_id)
+                continue
+            vid = db.x("INSERT INTO videos (source_id, path, size, added, fingerprint) VALUES (?, ?, ?, ?, ?)",
+                       (source_id, str(path), size, db.now(), fp))
             process_q.put(("video", vid))
             found += 1
+    db.update("sources", source_id,
+              last_scan=f"{found} new · {known} already done (skipped)")
     return found
 
 

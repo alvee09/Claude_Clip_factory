@@ -743,22 +743,23 @@ function renderLibrary() {
         `<button class="btn small" data-vol="${esc(v)}">${esc(v.split("/").pop())}</button>`).join("")
     : "<span class='hint'>No external drives detected. Plug in your HDD.</span>";
   $("#sources").innerHTML = S.sources.length ? `<tr><th>Folder</th><th></th></tr>` + S.sources.map(s => `
-    <tr><td class="path">${esc(s.path)}</td>
+    <tr><td class="path">${esc(s.path)}${s.last_scan ? `<div class="p">Last scan: ${esc(s.last_scan)}</div>` : ""}</td>
     <td style="text-align:right;white-space:nowrap"><button class="btn small" data-rescan="${s.id}">Re-scan</button>
     <button class="btn small danger" data-forget="${s.id}">Forget</button></td></tr>`).join("")
     : `<tr><td class="hint">No folders yet.</td></tr>`;
-  const label = { new: ["", "Queued"], analyzing: ["warn", "Finding highlights"], rendering: ["warn", "Cutting clips"], done: ["ok", "Done"], error: ["bad", "Error"] };
+  const label = { new: ["", "Queued"], analyzing: ["warn", "Finding highlights"], rendering: ["warn", "Cutting clips"], done: ["ok", "Done"], error: ["bad", "Error"], skipped: ["", "Skipped"] };
   $("#videos").innerHTML = S.videos.length ? `<tr><th>Video</th><th>Length</th><th>Size</th><th>Status</th><th>Clips</th><th></th></tr>` +
     S.videos.slice().reverse().map(v => { const [cls, l] = label[v.status] || ["", v.status]; return `<tr>
       <td class="path">${esc(v.path.split("/").pop())}<div class="p">${esc(v.path)}</div></td>
       <td class="num">${v.duration ? fmtT(v.duration) : "—"}</td><td class="num">${fmtGB(v.size || 0)}</td>
       <td><span class="badge ${cls}">${l}</span>${["analyzing", "rendering"].includes(v.status)
           ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.round(v.progress * 100)}%"></i></div>` : ""}
-          ${v.error ? `<div class="err">${esc(v.error)}</div>` : ""}</td>
+          ${v.error ? `<div class="err">${esc(v.error)}</div>` : ""}${v.status === "skipped" ? `<div class="p">Removed. Scans leave it alone.</div>` : ""}</td>
       <td class="num">${v.clips}</td>
       <td style="text-align:right;white-space:nowrap">${v.status === "done" ? `<button class="btn small" data-studio="${v.id}">Open in Studio</button> ` : ""}
         ${["done", "error"].includes(v.status) ? `<button class="btn small" data-retry="${v.id}">Re-process</button>
-        <button class="btn small danger" data-remove="${v.id}">Remove</button>` : ""}</td>
+        <button class="btn small danger" data-remove="${v.id}">Remove</button>` : ""}
+        ${v.status === "skipped" ? `<button class="btn small" data-retry="${v.id}">Process again</button>` : ""}</td>
     </tr>`; }).join("") : `<tr><td class="hint">No videos yet.</td></tr>`;
 }
 
@@ -771,14 +772,16 @@ document.addEventListener("click", async e => {
       const n = S.clips.filter(c => c.video_id === v.id).length;
       if (confirm(`Remove “${v.path.split("/").pop()}” and its ${n} clip(s) from Clip Factory?\n\n` + (uploaded
           ? `The uploaded copy (${fmtGB(v.size || 0)}) is deleted from this Mac.`
-          : "The video on your drive is NOT deleted.") + " Posted clips stay on YouTube and Instagram.")) {
+          : "The video on your drive is NOT deleted, and future scans will skip it (use Process again to bring it back).") + " Posted clips stay on YouTube and Instagram.")) {
         await api(`/api/videos/${v.id}`, undefined, "DELETE"); toast("Removed"); refresh();
       }
     }
     if (t.dataset.rescan) { await api(`/api/sources/${t.dataset.rescan}/scan`); toast("Scanning…"); }
     if (t.dataset.forget && confirm("Stop tracking this folder? (Nothing on the drive is deleted.)"))
       await api(`/api/sources/${t.dataset.forget}`, undefined, "DELETE");
-    if (t.dataset.retry && confirm("Re-process this video? Un-reviewed automatic clips from it will be replaced. Your own picks stay."))
+    if (t.dataset.retry && confirm(S.videos.find(x => x.id === +t.dataset.retry)?.status === "skipped"
+        ? "Process this video again? It will be analysed and cut into new clips."
+        : "Re-process this video? Un-reviewed automatic clips from it will be replaced. Your own picks stay."))
       await api(`/api/videos/${t.dataset.retry}/retry`);
     if (t.dataset.studio) { ST.vid = null; $("#st-video").value = t.dataset.studio; show("studio"); studioLoad(+t.dataset.studio); }
     refresh();
@@ -812,26 +815,42 @@ function putFile(f, onProgress) {
     xhr.send(f);
   });
 }
+// Same as worker.fingerprint on the server: size + SHA-1 of the first and last MB.
+async function fingerprint(f) {
+  const MB = 1024 * 1024;
+  const head = await f.slice(0, MB).arrayBuffer(), tail = await f.slice(Math.max(0, f.size - MB)).arrayBuffer();
+  const both = new Uint8Array(head.byteLength + tail.byteLength);
+  both.set(new Uint8Array(head)); both.set(new Uint8Array(tail), head.byteLength);
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-1", both));
+  return `${f.size}:${[...hash].map(b => b.toString(16).padStart(2, "0")).join("")}`;
+}
 async function uploadFiles(files) {
   files = [...files]; if (!files.length || uploading) return;
-  const vids = files.filter(f => VIDEO_EXT.test(f.name)), skipped = files.length - vids.length;
+  let vids = files.filter(f => VIDEO_EXT.test(f.name)); const skipped = files.length - vids.length;
   if (!vids.length) return toast("Those don't look like video files");
-  try { await api("/api/upload/check", { sizes: vids.map(f => f.size) }); }
-  catch (e) { $("#up-files").value = ""; show("library"); return alert(e.message); }
+  let already = [];
+  try {
+    const fps = await Promise.all(vids.map(fingerprint));
+    const r = await api("/api/upload/check", { files: vids.map((f, i) => ({ size: f.size, fingerprint: fps[i] })) });
+    already = vids.filter((f, i) => r.known[fps[i]]);
+    vids = vids.filter((f, i) => !r.known[fps[i]]);
+  } catch (e) { $("#up-files").value = ""; show("library"); return alert(e.message); }
+  if (!vids.length) { $("#up-files").value = ""; return toast(`Already in your library: ${already.map(f => f.name).join(", ")}. Nothing to upload.`); }
   const total = vids.reduce((n, f) => n + f.size, 0);
   $("#up-status").hidden = false; uploading = true; $("#side-up").disabled = true;
   let done = 0, added = 0;
   try {
     for (const [i, f] of vids.entries()) {
-      await putFile(f, p => {
+      const r = await putFile(f, p => {
         const all = (done + f.size * p) / total;
         $("#up-bar").style.width = Math.round(all * 100) + "%";
         $("#up-label").textContent = `Uploading ${vids.length > 1 ? `${i + 1} of ${vids.length}: ` : ""}${f.name} (${fmtGB(f.size)})… ${Math.round(p * 100)}%`;
         $("#side-up .lbl").textContent = `Uploading ${Math.round(all * 100)}%`;
       });
-      done += f.size; added++; refresh();
+      done += f.size; if (r.added) added++; else already.push(f); refresh();
     }
-    toast(`Added ${added} video(s). Cutting clips now.` + (skipped ? ` Skipped ${skipped} non-video file(s).` : ""));
+    toast(`Added ${added} video(s). Cutting clips now.` + (skipped ? ` Skipped ${skipped} non-video file(s).` : "")
+          + (already.length ? ` Skipped ${already.length} already in your library.` : ""));
   } catch (e) { toast((added ? `Added ${added}, then: ` : "") + e.message); }
   finally {
     uploading = false; $("#up-status").hidden = true; $("#up-files").value = "";
@@ -994,6 +1013,9 @@ function setSel(center, redraw = true) {
   chart.setAttribute("aria-valuetext", `Selected ${fmtT(ST.sel.start)} to ${fmtT(ST.sel.start + len)}`);
   if (redraw) drawChart();
 }
+// Where you click on the graph is where the clip starts, and the player goes there, so
+// pressing play shows the clip from its beginning.
+function pickAt(t, exact) { setSel(t + clipLen() / 2); seekPlayer(ST.sel.start, exact); }
 function seekPlayer(t, exact) {
   if (seekBusy && !exact) { seekNext = t; return; }
   seekBusy = true; seekNext = null;
@@ -1009,15 +1031,15 @@ const tAt = e => { const r = chart.getBoundingClientRect(); return clamp((e.clie
 chart.addEventListener("pointerdown", e => {
   if (!ST.duration) return;
   dragging = true; try { chart.setPointerCapture(e.pointerId); } catch {}
-  player.pause(); const t = tAt(e); setSel(t); seekPlayer(t);
+  player.pause(); pickAt(tAt(e));
 });
 chart.addEventListener("pointermove", e => {
   if (!ST.duration) return;
   const t = tAt(e);
-  if (dragging) { setSel(t); seekPlayer(t); hoverT = null; }
+  if (dragging) { pickAt(t); hoverT = null; }
   else if (e.pointerType === "mouse") { hoverT = t; drawChart(); }
 });
-chart.addEventListener("pointerup", e => { if (!dragging) return; dragging = false; const t = tAt(e); setSel(t); seekPlayer(t, true); });
+chart.addEventListener("pointerup", e => { if (!dragging) return; dragging = false; pickAt(tAt(e), true); });
 chart.addEventListener("pointercancel", () => { dragging = false; });
 chart.addEventListener("pointerleave", () => { if (hoverT != null) { hoverT = null; drawChart(); } });
 chart.addEventListener("keydown", e => {

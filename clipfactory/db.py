@@ -10,7 +10,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
     id INTEGER PRIMARY KEY,
     path TEXT UNIQUE NOT NULL,
-    added REAL NOT NULL
+    added REAL NOT NULL,
+    last_scan TEXT             -- what the last scan found, for the dashboard
 );
 CREATE TABLE IF NOT EXISTS videos (
     id INTEGER PRIMARY KEY,
@@ -20,10 +21,11 @@ CREATE TABLE IF NOT EXISTS videos (
     duration REAL,
     width INTEGER,
     height INTEGER,
-    status TEXT NOT NULL DEFAULT 'new',   -- new, analyzing, rendering, done, error
+    status TEXT NOT NULL DEFAULT 'new',   -- new, analyzing, rendering, done, error, skipped
     progress REAL DEFAULT 0,
     error TEXT,
-    added REAL NOT NULL
+    added REAL NOT NULL,
+    fingerprint TEXT           -- size + hash of the first and last MB: same file under any path
 );
 CREATE TABLE IF NOT EXISTS clips (
     id INTEGER PRIMARY KEY,
@@ -65,6 +67,8 @@ MIGRATIONS = [
     ("clips", "cover_tall", "TEXT"),
     ("clips", "cover_t", "REAL"),
     ("clips", "aspect", "TEXT"),
+    ("videos", "fingerprint", "TEXT"),
+    ("sources", "last_scan", "TEXT"),
 ]
 
 

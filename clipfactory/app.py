@@ -85,10 +85,17 @@ def _space_problem(size):
 
 @app.post("/api/upload/check")
 def upload_check():
-    """Before an upload starts: is there room for these files?"""
-    sizes = [int(x) for x in (request.json or {}).get("sizes", [])]
-    problem = _space_problem(sum(sizes))
-    return (_err(problem, 507) if problem else jsonify({"ok": True}))
+    """Before an upload starts: which of these files are already in the library (by
+    fingerprint), and is there room for the rest?"""
+    files = (request.json or {}).get("files", [])
+    known = {}
+    for f in files:
+        v = worker.known_video(str(f.get("fingerprint", "")))
+        if v:
+            known[f["fingerprint"]] = Path(v["path"]).name
+    size = sum(int(f.get("size", 0)) for f in files if f.get("fingerprint") not in known)
+    problem = _space_problem(size)
+    return (_err(problem, 507) if problem else jsonify({"known": known}))
 
 
 @app.put("/api/upload")
@@ -120,12 +127,17 @@ def upload_video():
                 out.write(chunk)
         if size and part.stat().st_size != size:
             raise RuntimeError("The upload was cut off before it finished")
+        fp = worker.fingerprint(part)
+        same = worker.known_video(fp)
+        if same:  # already in the library: don't keep a second copy
+            part.unlink()
+            return jsonify({"added": None, "known": Path(same["path"]).name})
         part.replace(dest)
     except Exception as e:
         part.unlink(missing_ok=True)
         return _err(f"Upload failed: {e}", 500)
-    vid = db.x("INSERT INTO videos (source_id, path, size, added) VALUES (?, ?, ?, ?)",
-               (sid, str(dest.resolve()), dest.stat().st_size, db.now()))
+    vid = db.x("INSERT INTO videos (source_id, path, size, added, fingerprint) VALUES (?, ?, ?, ?, ?)",
+               (sid, str(dest.resolve()), dest.stat().st_size, db.now(), fp))
     worker.process_q.put(("video", vid))
     return jsonify({"added": dest.name})
 
@@ -218,8 +230,8 @@ def add_clip(vid):
 
 @app.delete("/api/videos/<int:vid>")
 def remove_video(vid):
-    """Forget a video and delete its clips. An uploaded copy is deleted too;
-    a video on your drive is never touched."""
+    """Delete a video's clips. An uploaded copy is deleted and forgotten. A video on your
+    drive is never touched; it stays listed as skipped so scans don't pick it up again."""
     video = _video_or_404(vid)
     if video["status"] in ("analyzing", "rendering") or db.one(
             "SELECT id FROM clips WHERE video_id = ? AND status IN ('rendering', 'posting')", (vid,)):
@@ -227,16 +239,22 @@ def remove_video(vid):
     for clip in db.q("SELECT * FROM clips WHERE video_id = ?", (vid,)):
         worker.delete_clip_files(clip, keep_thumb=False, keep_covers=False)
     db.x("DELETE FROM clips WHERE video_id = ?", (vid,))
-    db.x("DELETE FROM videos WHERE id = ?", (vid,))
     (worker.SCORES / f"{vid}.json").unlink(missing_ok=True)
     path = Path(video["path"]).resolve()
     if config.UPLOADS.resolve() in path.parents:
         path.unlink(missing_ok=True)
+        db.x("DELETE FROM videos WHERE id = ?", (vid,))
+    else:
+        db.update("videos", vid, status="skipped", progress=0, error=None)
     return jsonify({"ok": True})
 
 
 @app.post("/api/videos/<int:vid>/retry")
 def retry_video(vid):
+    """The only way a video already in the library gets processed again: you asked."""
+    video = _video_or_404(vid)
+    if video["status"] in ("new", "analyzing", "rendering"):
+        return _err("This video is already being processed")
     db.update("videos", vid, status="new", error=None, progress=0)
     worker.process_q.put(("video", vid))
     return jsonify({"ok": True})
