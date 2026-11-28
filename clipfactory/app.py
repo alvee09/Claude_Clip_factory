@@ -194,7 +194,7 @@ def frame(vid):
     except ValueError:
         t, w = 0.0, 960
     out = subprocess.run([media.ffmpeg(), "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-i", video["path"],
-                          "-frames:v", "1", "-vf", f"scale='min({w},iw)':-2", "-q:v", "3" if w > 960 else "4",
+                          "-frames:v", "1", "-vf", media.sdr_prefix(video["path"]) + f"scale='min({w},iw)':-2", "-q:v", "3" if w > 960 else "4",
                           "-f", "image2", "-c:v", "mjpeg", "-"], capture_output=True)
     if out.returncode != 0 or not out.stdout:
         abort(404)

@@ -69,6 +69,10 @@ Each clip is rendered as
   (or full frame over a blurred background; default in Settings, changeable per clip);
 - **original** framing (regular YouTube video).
 
+Every clip is standard H.264 in normal colour at a steady frame rate (rounded to 24/25/30/50/60),
+which is what Instagram accepts. **HDR recordings** (PS5, iPhone) are converted to normal
+colour automatically; otherwise they look washed out and Instagram refuses them.
+
 Files go to `clips/` (change in Settings).
 
 ## Connect YouTube (one-time, ~10 min)

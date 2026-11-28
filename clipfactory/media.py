@@ -5,6 +5,7 @@ Highlights are found without AI, which suits gameplay / sports / action footage:
   * sudden rises in loudness - the moment something happens
   * scene-cut density - fast action, replays, camera switches
 """
+import functools
 import json
 import os
 import shutil
@@ -54,7 +55,43 @@ def probe(path):
         "height": (video or {}).get("height"),
         "has_video": video is not None,
         "has_audio": audio is not None,
+        # PS5 / iPhone HDR: PQ or HLG brightness curve
+        "hdr": (video or {}).get("color_transfer") in ("smpte2084", "arib-std-b67"),
+        "fps": _rate((video or {}).get("avg_frame_rate")) or _rate((video or {}).get("r_frame_rate")),
     }
+
+
+def _rate(text):
+    try:
+        num, den = (text or "").split("/")
+        return float(num) / float(den) if float(den) else None
+    except ValueError:
+        return None
+
+
+# Instagram rejects odd or variable frame rates, so clips go out at the nearest standard one.
+STANDARD_FPS = [(24000 / 1001, "24000/1001"), (24, "24"), (25, "25"), (30000 / 1001, "30000/1001"),
+                (30, "30"), (50, "50"), (60000 / 1001, "60000/1001"), (60, "60")]
+
+
+def output_fps(fps):
+    if not fps:
+        return "30"
+    return min(STANDARD_FPS, key=lambda r: abs(r[0] - min(fps, 60)))[1]
+
+
+# HDR footage turned into normal (SDR, BT.709) video. Without this, clips look washed out and
+# Instagram refuses them (an 8-bit file can't carry HDR).
+TO_SDR = "scale=out_color_matrix=bt709:out_primaries=bt709:out_transfer=bt709:out_range=tv"
+
+
+@functools.lru_cache(maxsize=64)
+def sdr_prefix(path):
+    """Filter to put first in a -vf chain for this source ('' when it's already SDR)."""
+    try:
+        return TO_SDR + "," if probe(path)["hdr"] else ""
+    except RuntimeError:
+        return ""
 
 
 def _run_with_progress(cmd, duration, on_progress):
@@ -209,12 +246,15 @@ def render(src, start, length, out, kind, settings, vertical_mode=None, crop_x=0
                   "[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
     else:
         vf = "scale='min(1920,iw)':-2,setsar=1"
+    info = probe(src)
+    vf = (TO_SDR + "," if info["hdr"] else "") + vf + f",scale=out_range=tv,format=yuv420p,fps={output_fps(info['fps'])}"
     tmp_out = out.with_suffix(".part.mp4")
     cmd = [ffmpeg(), "-v", "error", "-nostdin", "-y",
            "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{length:.3f}",
-           "-map", "0:v:0", "-map", "0:a:0?", "-vf", vf, "-fpsmax", "60",
+           "-map", "0:v:0", "-map", "0:a:0?", "-vf", vf, "-fps_mode", "cfr",
            "-c:v", "libx264", "-preset", settings["preset"], "-crf", str(settings["crf"]),
-           "-pix_fmt", "yuv420p", "-profile:v", "high",
+           "-pix_fmt", "yuv420p", "-profile:v", "high", "-color_range", "tv",
+           "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
            "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2",
            "-movflags", "+faststart", str(tmp_out)]
     _run_with_progress(cmd, length, on_progress)
